@@ -1,0 +1,10 @@
+Language: Cpp
+IndentWidth: 4
+SpaceAfterCStyleCast: false
+BreakBeforeBraces: Attach
+AllowShortFunctionsOnASingleLine: false
+SpacesBeforeTrailingComments: 2
+IndentGotoLabels: false
+DerivePointerAlignment: false
+PointerAlignment: Left
+AlwaysBreakTemplateDeclarations: true

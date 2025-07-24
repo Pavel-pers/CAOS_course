@@ -1,0 +1,7 @@
+tests:
+  - type: catch-unit
+    profiles:
+      - release
+    bin: test_simple_alloc 
+editable:
+  - simple-allocator.cpp

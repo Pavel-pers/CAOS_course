@@ -1,0 +1,19 @@
+[[project]]
+path = "common/syscalls/src/asm/x86_64"
+instruction_set = "x86/x86-64"
+assembler = "gas"
+
+[[project]]
+path = "common/syscalls/src/asm/aarch64"
+instruction_set = "arm"
+assembler = "gas"
+
+[[project]]
+path = "common/nostd/src/asm/x86_64"
+instruction_set = "x86/x86-64"
+assembler = "gas"
+
+[[project]]
+path = "common/nostd/src/asm/aarch64"
+instruction_set = "arm"
+assembler = "gas"

@@ -1,0 +1,7 @@
+tests:
+  - type: catch-unit
+    profiles:
+      - debug
+    bin: test_a_plus_b
+editable:
+  - a-plus-b.cpp

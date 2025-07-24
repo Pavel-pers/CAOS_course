@@ -1,0 +1,15 @@
+tests:
+  - type: catch-unit
+    profiles:
+      - debug
+      - asan
+    bin: test_list
+  - type: forbidden-patterns
+    groups:
+      - patterns:
+          - <list>
+          - <queue>
+          - <vector>
+        hint: "Implement linked list yourself"
+editable:
+  - list.hpp

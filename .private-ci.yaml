@@ -1,0 +1,23 @@
+stages:
+  - test
+
+test-solutions-clang:
+  stage: test
+  image: rust:1.88
+  timeout: 20m
+  tags:
+    - kek-today
+  script:
+    - apt-get update && apt-get install -y cmake clang-19
+    - CXX=$(which clang++-19) CC=$(which clang-19) ./common/tools/test_all_tasks.sh
+
+
+test-solutions-gcc:
+  stage: test
+  image: rust:1.88
+  timeout: 20m
+  tags:
+    - kek-today
+  script:
+    - apt-get update && apt-get install -y cmake
+    - CXX=$(which clang++-19) CC=$(which clang-19) ./common/tools/test_all_tasks.sh

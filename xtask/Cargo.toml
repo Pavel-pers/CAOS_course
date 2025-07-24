@@ -1,0 +1,18 @@
+[package]
+name = "xtask"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+clap = { version = "4.5", features = ["derive"] }
+anyhow = { version = "1.0" }
+itertools = { version = "0.14" }
+globset = { version = "0.4" }
+serde = { version = "1.0", features = ["derive"] }
+serde_yml = { version = "0.0" }
+gix = { version = "0.72" }
+xshell = { version = "0.2" }
+num_cpus = { version = "1.17" }
+anstream = { version = "0.6.19" }
+annotate-snippets = { version = "0.11" }
+walkdir = { version = "2.5" }
