@@ -1,0 +1,8 @@
+tests:
+  - type: nejudge
+    checker: checker_addrinfo
+    solution: solution_addrinfo
+    profiles:
+      - release
+editable:
+  - solution.cpp

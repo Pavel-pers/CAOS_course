@@ -3,33 +3,33 @@ import xml.etree.ElementTree as ET
 
 def xml2md(elem: ET.Element, idx=0):
     if elem.tag == 'p':
-        return ((elem.text if elem.text else '') +
+        return ((elem.text or '') +
                 ''.join(xml2md(inner) for inner in elem) +
-                (elem.tail if elem.tail else '') + '\n')
+                (elem.tail or '') + '\n')
     if elem.tag == 'ul':
-        return ((elem.text if elem.text else '') + '\n' +
+        return ((elem.text or '') + '\n' +
                 ''.join(xml2md(inner, i) for i, inner in enumerate(elem)) +
-                (elem.tail if elem.tail else '') + '\n')
+                (elem.tail or '') + '\n')
     if elem.tag == 'ol':
-        return ((elem.text if elem.text else '') + '\n' +
+        return ((elem.text or '') + '\n' +
                 ''.join(xml2md(inner, i) for i, inner in enumerate(elem)) +
-                (elem.tail if elem.tail else '') + '\n')
+                (elem.tail or '') + '\n')
     if elem.tag == 'li':
-        return (f'{idx + 1}) ' + (elem.text if elem.text else '') +
+        return (f'{idx + 1}) ' + (elem.text or '') +
                 ''.join(xml2md(inner, i) for i, inner in enumerate(elem)) +
-                (elem.tail if elem.tail else '') + '\n')
+                (elem.tail or '') + '\n')
     if elem.tag == 'pre':
-        return '```\n' + ''.join(elem.itertext()) + '\n```' + (elem.tail if elem.tail else '')
+        return '```\n' + ''.join(elem.itertext()) + '\n```' + (elem.tail or '')
     if elem.tag == 'b':
-        return '**' + ''.join(elem.itertext()) + '**' + (elem.tail if elem.tail else '')
+        return '**' + ''.join(elem.itertext()) + '**' + (elem.tail or '')
     if elem.tag == 'tt' or elem.tag == 'code':
-        return '`' + ''.join(elem.itertext()) + '`' + (elem.tail if elem.tail else '')
+        return '`' + ''.join(elem.itertext()) + '`' + (elem.tail or '')
     if elem.tag == 'a':
-        return '[' + ''.join(elem.itertext()) + '](' + elem.attrib['href'] + ')' + (elem.tail if elem.tail else '')
+        return '[' + ''.join(elem.itertext()) + '](' + elem.attrib['href'] + ')' + (elem.tail or '')
     if elem.tag == 'details' or elem.tag == 'summary':
         return f'<{elem.tag}>\n' + (elem.text.strip() if elem.text else '') + \
             ''.join(xml2md(inner, i) for i, inner in enumerate(elem)) + \
-            (elem.tail if elem.tail else '') + f'\n</{elem.tag}>\n'
+            (elem.tail or '') + f'\n</{elem.tag}>\n'
     raise RuntimeError(f"Unsupported {elem}")
 
 

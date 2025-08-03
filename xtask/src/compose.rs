@@ -64,16 +64,19 @@ fn parse_token(line: &str) -> Result<Option<Token>> {
         None => return Ok(None),
     };
 
-    let kind = if cmd.starts_with("private") {
-        TokenKind::Private
-    } else if cmd.starts_with("public") {
-        TokenKind::Public
-    } else if cmd.starts_with("begin_private") {
-        TokenKind::BeginPrivate
-    } else if cmd.starts_with("end_private") {
-        TokenKind::EndPrivate
-    } else {
-        bail!("unknown compose command: {}", cmd);
+    let command_token = {
+        let len = cmd
+            .find(|c: char| !c.is_ascii_alphanumeric() && !"_-".contains(c))
+            .unwrap_or_else(|| cmd.len());
+        &cmd[..len]
+    };
+
+    let kind = match command_token {
+        "private" => TokenKind::Private,
+        "public" => TokenKind::Public,
+        "begin_private" => TokenKind::BeginPrivate,
+        "end_private" => TokenKind::EndPrivate,
+        cmd => bail!("unknown compose command: {cmd}"),
     };
 
     let properties_str = match cmd.find('(') {

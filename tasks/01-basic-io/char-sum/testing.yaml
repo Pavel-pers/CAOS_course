@@ -1,0 +1,21 @@
+tests:
+  - type: nejudge
+    solution: solution_char_sum
+    checker: std:cmp
+    profiles:
+      - asan
+      - release
+  - type: forbidden-patterns
+    groups:
+      - patterns:
+          - <iostream>
+          - <stdio.h>
+          - std::cin
+          - std::cout
+          - getchar
+          - scanf
+          - printf
+        hint: "Use bare read/write"
+editable:
+  - solution.cpp
+

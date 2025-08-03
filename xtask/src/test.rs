@@ -54,7 +54,7 @@ impl BuildProfile {
 #[derive(Debug, Serialize, Deserialize)]
 struct CatchUnit {
     profiles: Vec<BuildProfile>,
-    bin: PathBuf,
+    bin: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -85,10 +85,27 @@ impl ForbiddenPatterns {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+struct NejudgeParams {
+    #[serde(default)]
+    extra_args: Vec<String>,
+
+    #[serde(default)]
+    checker: Option<String>,
+
+    #[serde(default)]
+    interactor: Option<String>,
+
+    solution: String,
+
+    profiles: Vec<BuildProfile>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
 enum TestStep {
     CatchUnit(CatchUnit),
     ForbiddenPatterns(ForbiddenPatterns),
+    Nejudge(NejudgeParams),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -112,6 +129,17 @@ struct ForbiddenStuff {
     span: Range<usize>,
     message: String,
     hint: Option<String>,
+}
+
+trait PathExt {
+    fn to_str_logged(&self) -> Result<&str>;
+}
+
+impl PathExt for Path {
+    fn to_str_logged(&self) -> Result<&str> {
+        self.to_str()
+            .ok_or_else(|| anyhow!("couldn't convert {} to UTF-8 string", self.display()))
+    }
 }
 
 impl TestContext {
@@ -150,7 +178,7 @@ impl TestContext {
         })
     }
 
-    fn build_binary(&self, binary: &Path, profile: BuildProfile) -> Result<PathBuf> {
+    fn build_target(&self, target: &str, profile: BuildProfile) -> Result<PathBuf> {
         let build_dir = self.repo_root.join(profile.to_build_dir());
         if !build_dir.exists() {
             fs::create_dir(&build_dir)
@@ -161,19 +189,77 @@ impl TestContext {
                 self.shell,
                 "cmake -B {build_dir} -S {repo_path} -DCMAKE_BUILD_TYPE={cmake_build_type}"
             )
-            .run()
-            .with_context(|| "while running cmake")?;
+            .run()?;
         }
 
         let cpus_str = format!("{}", num_cpus::get());
         cmd!(
             self.shell,
-            "cmake --build {build_dir} --target {binary} -j {cpus_str}"
+            "cmake --build {build_dir} --target {target} -j {cpus_str}"
         )
-        .run()
-        .with_context(|| "while building")?;
+        .run()?;
 
-        Ok(build_dir.join(binary))
+        Ok(build_dir.join(target))
+    }
+
+    fn build_maybe_target<Target: AsRef<str>>(
+        &self,
+        binary: Option<Target>,
+        profile: BuildProfile,
+    ) -> Result<Option<PathBuf>> {
+        binary
+            .map(|target| self.build_target(target.as_ref(), profile))
+            .transpose()
+    }
+
+    fn nejudge_runner_path(&self) -> PathBuf {
+        let mut path = self.repo_root.clone();
+        // TODO: Get this value from global config
+        path.push("common/tools/test.py");
+        path
+    }
+
+    fn run_nejudge_profile(&self, cfg: &NejudgeParams, profile: BuildProfile) -> Result<()> {
+        let interactor_path =
+            self.build_maybe_target(cfg.interactor.as_ref(), BuildProfile::Release)?;
+        let checker_path = match &cfg.checker {
+            Some(checker) => {
+                let checker_path = match checker.strip_prefix("std:") {
+                    Some(std_check) => PathBuf::from(std_check),
+                    None => self.build_target(checker, BuildProfile::Release)?,
+                };
+                Some(checker_path)
+            }
+            None => None,
+        };
+        let solution_path = self.build_target(&cfg.solution, profile)?;
+
+        let runner_path = self.nejudge_runner_path();
+        let mut cmd = vec![runner_path.to_str_logged()?];
+
+        for (flag, value) in [
+            ("--checker", &checker_path),
+            ("--interactor", &interactor_path),
+        ] {
+            let path = match value {
+                Some(v) => v,
+                None => continue,
+            };
+            cmd.extend([flag, path.to_str_logged()?]);
+        }
+
+        cmd.extend(["--run-cmd", solution_path.to_str_logged()?]);
+
+        cmd!(self.shell, "python3 {cmd...}").run()?;
+
+        Ok(())
+    }
+
+    fn run_nejudge(&self, cfg: &NejudgeParams) -> Result<()> {
+        for &profile in &cfg.profiles {
+            self.run_nejudge_profile(cfg, profile)?;
+        }
+        Ok(())
     }
 
     fn run(self) -> Result<()> {
@@ -189,15 +275,14 @@ impl TestContext {
         match step {
             CatchUnit(cfg) => self.run_unit(cfg),
             ForbiddenPatterns(cfg) => self.check_forbidden_patterns(cfg),
+            Nejudge(cfg) => self.run_nejudge(cfg),
         }
     }
 
     fn run_unit(&self, cfg: &CatchUnit) -> Result<()> {
         for &profile in &cfg.profiles {
-            let path = self.build_binary(&cfg.bin, profile)?;
-            cmd!(self.shell, "{path}")
-                .run()
-                .with_context(|| format!("while running {}", path.display()))?;
+            let path = self.build_target(&cfg.bin, profile)?;
+            cmd!(self.shell, "{path}").run()?;
         }
 
         Ok(())
@@ -280,10 +365,7 @@ impl TestContext {
                 let local_path = path
                     .strip_prefix(&self.repo_root)?
                     .strip_prefix(&self.task_path)?
-                    .to_str()
-                    .ok_or_else(|| {
-                        anyhow!("Couldn't convert {} to UTF-8 string", path.display())
-                    })?;
+                    .to_str_logged()?;
 
                 let span = (span.start + line_offset)..(span.end + line_offset);
                 let snippet = {

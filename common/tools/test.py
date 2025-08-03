@@ -296,7 +296,7 @@ class Initializer:
             else:
                 try:
                     self.p.send_signal(signal.SIGINT)
-                except:
+                except Exception:
                     pass
             self.p.communicate()
             if not self.run_till_end and self.p.returncode != 0:
@@ -306,7 +306,7 @@ class Initializer:
 def create_run_dir(original: Path, static_copy: bool, dst: Path = Path('run')) -> Path:
     try:
         shutil.rmtree(dst)
-    except:
+    except Exception:
         pass
     if original.exists():
         if not static_copy:
@@ -345,45 +345,67 @@ def fix_command_path(cmd: list[str], run_path: Path, extra_params: list[str]) ->
     return full_cmd
 
 
+def cmp_checker(res: bytes, correct: bytes):
+    diff = list(difflib.diff_bytes(difflib.unified_diff, correct.split(b'\n'), res.split(b'\n')))
+    if diff:
+        for line in diff:
+            sys.stdout.write(line.decode(errors='replace'))
+            if not line.endswith(b'\n'):
+                print()
+        raise RuntimeError(f"Output missmatched on test {test}. Check \"output\" file")
+
+
+def sorted_lines_checker(res: bytes, correct: bytes):
+    diff = list(difflib.diff_bytes(difflib.unified_diff, sorted(correct.strip().split(b'\n')), sorted(res.strip().split(b'\n'))))
+    if diff:
+        for line in diff:
+            sys.stdout.write(line.decode(errors='replace'))
+            if not line.endswith(b'\n'):
+                print()
+        raise RuntimeError(f"Output missmatched on test {test}. Check \"output\" file")
+
+
+def cmp_double_checker(res: bytes, correct: bytes):
+    def parse_double(data: bytes) -> float:
+        res = data.decode().strip()
+        if res.startswith('0x'):
+            return float.fromhex(res)
+        return float(res)
+    eps = float(os.environ.get('EPS', 0))
+    res_f = parse_double(res)
+    ans_f = parse_double(correct)
+    if abs(res_f - ans_f) > eps:
+        raise RuntimeError(f'{res} != {ans_f} for EPS={eps}')
+
+
+def ignore_spaces_checker(res: bytes, correct: bytes):
+    res_s = res.decode().split()
+    cmp_s = correct.decode().split()
+    if res_s != cmp_s:
+        raise RuntimeError(f"Output missmatched on test {test}. Check \"output\" file")
+
+
+def ignore_checker(res: bytes, correct: bytes):
+    pass
+
+
 def res_checker(res: bytes, ans: Path, checker: str):
     with open(ans, 'rb') as expected:
-        to_cmp = expected.read()
-    if checker == 'cmp':
-        diff = list(difflib.diff_bytes(difflib.unified_diff, to_cmp.split(b'\n'), res.split(b'\n')))
-        if diff:
-            for line in diff:
-                sys.stdout.write(line.decode(errors='replace'))
-                if not line.endswith(b'\n'):
-                    print()
-            raise RuntimeError(f"Output missmatched on test {test}. Check \"output\" file")
-    elif checker == 'sorted-lines':
-        diff = list(difflib.diff_bytes(difflib.unified_diff, sorted(to_cmp.strip().split(b'\n')), sorted(res.strip().split(b'\n'))))
-        if diff:
-            for line in diff:
-                sys.stdout.write(line.decode(errors='replace'))
-                if not line.endswith(b'\n'):
-                    print()
-            raise RuntimeError(f"Output missmatched on test {test}. Check \"output\" file")
-    elif checker == 'cmp-double':
-        def parse_double(data: bytes) -> float:
-            res = data.decode().strip()
-            if res.startswith('0x'):
-                return float.fromhex(res)
-            return float(res)
-        eps = float(os.environ.get('EPS', 0))
-        res_f = parse_double(res)
-        ans_f = parse_double(to_cmp)
-        if abs(res_f - ans_f) > eps:
-            raise RuntimeError(f'{res} != {ans_f} for EPS={eps}')
-    elif checker == 'ignore-spaces':
-        res_s = res.decode().split()
-        cmp_s = to_cmp.decode().split()
-        if res_s != cmp_s:
-            raise RuntimeError(f"Output missmatched on test {test}. Check \"output\" file")
-    elif checker == 'ignore':
-        return
-    else:
+        correct = expected.read()
+
+    checkers = {
+        'cmp': cmp_checker,
+        'sorted-lines': sorted_lines_checker,
+        'cmp-double': cmp_double_checker,
+        'ignore-spaces': ignore_spaces_checker,
+        'ignore': ignore_checker
+    }
+
+    checker_fn = checkers.get(checker, None)
+
+    if checker_fn is None:
         raise RuntimeError("Unknown checker " + checker)
+    checker_fn(res, correct)
 
 
 def run_solution(input_file: Path, correct_file: Path, inf_file: Path, cmd: str, params: str,
@@ -418,7 +440,7 @@ def run_solution(input_file: Path, correct_file: Path, inf_file: Path, cmd: str,
     before_children_user = os.times().children_user
     if interactor is not None:
         interactor = Path(interactor).absolute()
-    if str(checker).startswith('./'):
+    if '/' in str(checker):
         checker = Path(checker).absolute()
     popen_args: dict[str, Any] = {
         'stdin': subprocess.PIPE,
@@ -428,6 +450,7 @@ def run_solution(input_file: Path, correct_file: Path, inf_file: Path, cmd: str,
     }
     if 'max_process_count' in meta and is_pipeline:
         m = int(cast(str, meta.get('max_process_count')))
+
         def preexec_fn():
             print(resource.getrlimit(resource.RLIMIT_NPROC), file=sys.stderr)
             resource.setrlimit(resource.RLIMIT_NPROC, (m, m))
@@ -485,7 +508,7 @@ def run_solution(input_file: Path, correct_file: Path, inf_file: Path, cmd: str,
             if isinstance(checker, Path):
                 if output_file:
                     if res:
-                        raise RuntimeError(f'Unsupported')
+                        raise RuntimeError('Unsupported')
                 else:
                     output_file = 'fake-output.txt'
                     with open(output_file, 'wb') as f:
@@ -505,7 +528,7 @@ def run_solution(input_file: Path, correct_file: Path, inf_file: Path, cmd: str,
                         res = f.read()
                 try:
                     res_checker(res, correct_file, checker)
-                except:
+                except Exception:
                     if str(test) in may_fail_local:
                         print(f"Test {test} skipped")
                     else:
@@ -561,7 +584,7 @@ def parse_inf_file(f):
             res[key] = val
         elif key == 'environ' or key == 'compiler_env':
             key = 'environ'
-            if not key in res:
+            if key not in res:
                 res[key] = {}
             parse_env(val, res[key])
         elif key == 'interactor_env':

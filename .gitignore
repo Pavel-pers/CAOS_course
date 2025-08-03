@@ -333,3 +333,6 @@ build_*
 
 # Clangd
 .cache
+
+# Nejudge runner artefacts
+tasks/**/run/

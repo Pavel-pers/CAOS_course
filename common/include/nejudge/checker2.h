@@ -1,52 +1,60 @@
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
 #include <ctype.h>
 #include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
-enum
-{
-    RUN_OK               = 0,
-    RUN_COMPILE_ERR      = 1,
-    RUN_RUN_TIME_ERR     = 2,
-    RUN_TIME_LIMIT_ERR   = 3,
+enum {
+    RUN_OK = 0,
+    RUN_COMPILE_ERR = 1,
+    RUN_RUN_TIME_ERR = 2,
+    RUN_TIME_LIMIT_ERR = 3,
     RUN_PRESENTATION_ERR = 4,
     RUN_WRONG_ANSWER_ERR = 5,
-    RUN_CHECK_FAILED     = 6,
-    RUN_PARTIAL          = 7,
-    RUN_ACCEPTED         = 8,
-    RUN_IGNORED          = 9,
-    RUN_DISQUALIFIED     = 10,
-    RUN_PENDING          = 11,
-    RUN_MEM_LIMIT_ERR    = 12,
-    RUN_SECURITY_ERR     = 13,
-    RUN_STYLE_ERR        = 14,
+    RUN_CHECK_FAILED = 6,
+    RUN_PARTIAL = 7,
+    RUN_ACCEPTED = 8,
+    RUN_IGNORED = 9,
+    RUN_DISQUALIFIED = 10,
+    RUN_PENDING = 11,
+    RUN_MEM_LIMIT_ERR = 12,
+    RUN_SECURITY_ERR = 13,
+    RUN_STYLE_ERR = 14,
     RUN_WALL_TIME_LIMIT_ERR = 15,
-    RUN_PENDING_REVIEW   = 16,
-    RUN_REJECTED         = 17,
-    RUN_SKIPPED          = 18,
-    RUN_SYNC_ERR         = 19,
-    RUN_SUMMONED         = 23,
+    RUN_PENDING_REVIEW = 16,
+    RUN_REJECTED = 17,
+    RUN_SKIPPED = 18,
+    RUN_SYNC_ERR = 19,
+    RUN_SUMMONED = 23,
 };
 
 #define xcalloc calloc
 
-#define fatal_WA(...) fprintf(stderr, __VA_ARGS__); fprintf(stderr, "\n"); exit(1)
-#define fatal_PE(...) fprintf(stderr, __VA_ARGS__); fprintf(stderr, "\n"); exit(1)
-#define fatal_CF(...) fprintf(stderr, __VA_ARGS__); fprintf(stderr, "\n"); exit(1)
+#define fatal_WA(...)                                                          \
+    fprintf(stderr, __VA_ARGS__);                                              \
+    fprintf(stderr, "\n");                                                     \
+    exit(1)
+#define fatal_PE(...)                                                          \
+    fprintf(stderr, __VA_ARGS__);                                              \
+    fprintf(stderr, "\n");                                                     \
+    exit(1)
+#define fatal_CF(...)                                                          \
+    fprintf(stderr, __VA_ARGS__);                                              \
+    fprintf(stderr, "\n");                                                     \
+    exit(1)
 
 #define checker_drain() ;
 
 #define checker_kill kill
 
-FILE * f_in = NULL;
-FILE * f_out = NULL;
+FILE* f_in = NULL;
+FILE* f_out = NULL;
 
-const char * _(const char *s) {
+const char* _(const char* s) {
     return s;
 }
 
-void checker_do_init(int argc, char **argv, int corr_flag, int info_flag, int tgz_flag) {
+void checker_do_init(int argc, char** argv, int, int, int) {
     if (argc < 3) {
         fatal_CF(_("arguments expected '%d'"), argc);
     }
@@ -59,7 +67,8 @@ void checker_do_init(int argc, char **argv, int corr_flag, int info_flag, int tg
     }
 }
 
-int checker_read_in_unsigned_long_long(const char *name, int eof_error_flag, unsigned long long *p_val) {
+int checker_read_in_unsigned_long_long(const char* name, int eof_error_flag,
+                                       unsigned long long* p_val) {
     int r = fscanf(f_in, "%llu", p_val);
     if (eof_error_flag && r == EOF) {
         fatal_PE(_("Unexpected EOF while reading %s"), name);
@@ -67,7 +76,7 @@ int checker_read_in_unsigned_long_long(const char *name, int eof_error_flag, uns
     return r;
 }
 
-int checker_read_in_int(const char *name, int eof_error_flag, int *p_val) {
+int checker_read_in_int(const char* name, int eof_error_flag, int* p_val) {
     int r = fscanf(f_in, "%d", p_val);
     if (eof_error_flag && r == EOF) {
         fatal_PE(_("Unexpected EOF while reading %s"), name);
@@ -75,7 +84,8 @@ int checker_read_in_int(const char *name, int eof_error_flag, int *p_val) {
     return r;
 }
 
-int checker_read_out_unsigned_long_long(const char *name, int eof_error_flag, unsigned long long *p_val) {
+int checker_read_out_unsigned_long_long(const char* name, int eof_error_flag,
+                                        unsigned long long* p_val) {
     int r = fscanf(f_out, "%llu", p_val);
     if (eof_error_flag && r == EOF) {
         fatal_PE(_("Unexpected EOF while reading %s"), name);
@@ -86,11 +96,12 @@ int checker_read_out_unsigned_long_long(const char *name, int eof_error_flag, un
 void checker_in_eof(void) {
     int c;
 
-    while ((c = getc(f_in)) != EOF && isspace(c));
+    while ((c = getc(f_in)) != EOF && isspace(c))
+        ;
     if (c != EOF) {
         if (c < ' ') {
-            fatal_CF(_("%s: invalid control character with code %d"),
-                     "input", c);
+            fatal_CF(_("%s: invalid control character with code %d"), "input",
+                     c);
         } else {
             fatal_CF(_("%s: garbage where EOF expected"), "input");
         }
@@ -101,7 +112,9 @@ void checker_in_eof(void) {
 }
 
 void checker_in_close(void) {
-    if (!f_in) return;
+    if (!f_in) {
+        return;
+    }
     fclose(f_in);
     f_in = NULL;
 }
@@ -109,11 +122,12 @@ void checker_in_close(void) {
 void checker_out_eof(void) {
     int c;
 
-    while ((c = getc(f_out)) != EOF && isspace(c));
+    while ((c = getc(f_out)) != EOF && isspace(c))
+        ;
     if (c != EOF) {
         if (c < ' ') {
-            fatal_CF(_("%s: invalid control character with code %d"),
-                     "output", c);
+            fatal_CF(_("%s: invalid control character with code %d"), "output",
+                     c);
         } else {
             fatal_CF(_("%s: garbage where EOF expected"), "output");
         }
@@ -124,13 +138,15 @@ void checker_out_eof(void) {
 }
 
 void checker_out_close(void) {
-    if (!f_out) return;
+    if (!f_out) {
+        return;
+    }
     fclose(f_out);
     f_out = NULL;
 }
 
-int checker_stoi(const char * str, int base, int *val) {
-    char *end = NULL;
+int checker_stoi(const char* str, int base, int* val) {
+    char* end = NULL;
     *val = strtol(str, &end, base);
     return *end == '\0';
 }
