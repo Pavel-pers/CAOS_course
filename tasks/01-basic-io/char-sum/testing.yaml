@@ -7,7 +7,7 @@ tests:
       - release
   - type: forbidden-patterns
     groups:
-      - patterns:
+      - substring:
           - <iostream>
           - <stdio.h>
           - std::cin
@@ -18,4 +18,3 @@ tests:
         hint: "Use bare read/write"
 editable:
   - solution.cpp
-

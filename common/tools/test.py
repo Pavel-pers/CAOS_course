@@ -438,8 +438,7 @@ def run_solution(input_file: Path, correct_file: Path, inf_file: Path, cmd: str,
         else:
             env.update(env_add)
     before_children_user = os.times().children_user
-    if interactor is not None:
-        interactor = Path(interactor).absolute()
+    interactor = interactor and Path(interactor).absolute()
     if '/' in str(checker):
         checker = Path(checker).absolute()
     popen_args: dict[str, Any] = {
@@ -637,10 +636,11 @@ parser.add_argument('--may-fail-local', nargs='+', default=[])
 parser.add_argument('--user', required=False)
 parser.add_argument('--input-filename', default='input.txt')
 parser.add_argument('--static-copy', action='store_true')
+parser.add_argument('--retests-count', default=1, type=int)
+parser.add_argument('--retries-count', default=1, type=int)
 args = parser.parse_args()
 
 is_pipeline = bool(os.environ.get('GITLAB_CI', None))
-retests_amount = int(os.environ.get('EJ_RETESTS_AMOUNT', 1))
 
 if is_pipeline:
     args.may_fail_local = []
@@ -649,7 +649,7 @@ else:
 
 check_style(args.source_file, is_pipeline)
 
-for cnt in range(retests_amount):
+for cnt in range(args.retests_count):
     print(f"Trying tests #{cnt}")
     for test in sorted(Path('tests').glob('*.dat')):
         inf = Path(str(test).removesuffix('.dat') + '.inf')
@@ -667,10 +667,23 @@ for cnt in range(retests_amount):
                 meta = parse_inf_file(f)
         if not ans.is_file() and not args.prepare_answers:
             raise RuntimeError("No answer for test " + test.name)
-        res = run_solution(test, ans, inf, args.run_cmd, meta.get('params', ''), args.output_file, meta.get('environ'),
-                           args.interactor, args.initializer, args.user, meta, is_pipeline, dirent, args.static_copy,
-                           args.input_filename, args.checker, args.may_fail_local, skip_tests=args.prepare_answers,
-                           run_initializer_till_end=args.initializer_run_till_end)
+
+        def run() -> bytes:
+            return run_solution(test, ans, inf, args.run_cmd, meta.get('params', ''), args.output_file, meta.get('environ'),
+                                args.interactor, args.initializer, args.user, meta, is_pipeline, dirent, args.static_copy,
+                                args.input_filename, args.checker, args.may_fail_local, skip_tests=args.prepare_answers,
+                                run_initializer_till_end=args.initializer_run_till_end)
+
+        for i in range(args.retries_count):
+            try:
+                res = run()
+            except RuntimeError as e:
+                will_retry = i + 1 < args.retries_count
+                will_retry_str = " not" * (not will_retry)
+                print(f"Attempt {i} failed with {e},{will_retry_str} going to retry")
+                if not will_retry:
+                    raise
+
         if args.prepare_answers:
             with open(ans, 'wb') as fout:
                 fout.write(res)

@@ -58,7 +58,7 @@ fn parse_token(line: &str) -> Result<Option<Token>> {
         None => return Ok(None),
     };
 
-    const COMPOSE_PREFIX: &'static str = "compose::";
+    const COMPOSE_PREFIX: &str = "compose::";
     let cmd = match comment.find(COMPOSE_PREFIX) {
         Some(pos) => &comment[pos + COMPOSE_PREFIX.len()..],
         None => return Ok(None),
@@ -67,7 +67,7 @@ fn parse_token(line: &str) -> Result<Option<Token>> {
     let command_token = {
         let len = cmd
             .find(|c: char| !c.is_ascii_alphanumeric() && !"_-".contains(c))
-            .unwrap_or_else(|| cmd.len());
+            .unwrap_or(cmd.len());
         &cmd[..len]
     };
 
@@ -170,10 +170,10 @@ fn process_source(src: String) -> Result<ProcessedSource> {
         }
 
         removed_lines += end - begin;
-        if !token.properties.is_empty() {
-            if let TokenProperty::Task(task) = &token.properties[0] {
-                *removed_by_task.entry(task.clone()).or_insert(0) += end - begin;
-            }
+        if !token.properties.is_empty()
+            && let TokenProperty::Task(task) = &token.properties[0]
+        {
+            *removed_by_task.entry(task.clone()).or_insert(0) += end - begin;
         }
 
         let no_hint = token.properties.contains(&TokenProperty::NoHint);
@@ -188,7 +188,7 @@ fn process_source(src: String) -> Result<ProcessedSource> {
                     None
                 }
             })
-            .nth(0);
+            .next();
         if no_hint {
             if begin > 0
                 && lines[begin - 1].trim().is_empty()
@@ -276,7 +276,7 @@ impl<'a> Compose<'a> {
                 if line.is_empty() || line.starts_with("#") {
                     continue;
                 }
-                add_glob(&line)?;
+                add_glob(line)?;
             }
         }
 
@@ -285,8 +285,7 @@ impl<'a> Compose<'a> {
         }
 
         Ok(Compose {
-            args: args,
-
+            args,
             removed_lines: 0,
             removed_by_task: HashMap::new(),
             glob_set: glob_builder.build().context("Failed to build glob set")?,
@@ -315,16 +314,16 @@ impl<'a> Compose<'a> {
                 fs::write(out_file, new_content.src)
                     .with_context(|| format!("failed to write file {}", out_file.display()))?;
             }
-        } else if let Some(out_file) = out_path {
-            if in_path != out_file {
-                fs::copy(in_path, out_file).with_context(|| {
-                    format!(
-                        "failed to copy {} to {}",
-                        in_path.display(),
-                        out_file.display()
-                    )
-                })?;
-            }
+        } else if let Some(out_file) = out_path
+            && in_path != out_file
+        {
+            fs::copy(in_path, out_file).with_context(|| {
+                format!(
+                    "failed to copy {} to {}",
+                    in_path.display(),
+                    out_file.display()
+                )
+            })?;
         }
 
         Ok(())
@@ -382,7 +381,7 @@ impl<'a> Compose<'a> {
 
         if self.args.stat {
             for (k, v) in self.removed_by_task.iter().sorted_by_key(|x| x.0) {
-                println!("{}\t{}", v, k);
+                println!("{v}\t{k}");
             }
 
             println!("{}\ttotal", self.removed_lines);

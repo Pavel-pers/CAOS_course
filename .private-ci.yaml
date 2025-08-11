@@ -1,23 +1,82 @@
 stages:
   - test
+  - deploy
+
+.base:
+  image: rust:1.88
+  timeout: 10m
+  tags: ["kek-today"]
+  variables:
+    CARGO_HOME: "$CI_PROJECT_DIR/.cargo-home"
+    CARGO_TARGET_DIR: "$CI_PROJECT_DIR/target"
 
 test-solutions-clang:
+  extends: .base
   stage: test
-  image: rust:1.88
-  timeout: 20m
-  tags:
-    - kek-today
   script:
     - apt-get update && apt-get install -y cmake clang-19
     - CXX=$(which clang++-19) CC=$(which clang-19) ./common/tools/test_all_tasks.sh
+  cache:
+    - key: rust-build
+      paths:
+        - target/
+        - .cargo-home/
+        - Cargo.lock
+    - key: clang-build
+      paths:
+        - build_*/
 
 
 test-solutions-gcc:
+  extends: .base
   stage: test
-  image: rust:1.88
-  timeout: 20m
-  tags:
-    - kek-today
   script:
     - apt-get update && apt-get install -y cmake
-    - CXX=$(which clang++-19) CC=$(which clang-19) ./common/tools/test_all_tasks.sh
+    - CXX=$(which g++) CC=$(which gcc) ./common/tools/test_all_tasks.sh
+  cache:
+    - key: rust-build
+      paths:
+        - target/
+        - .cargo-home/
+        - Cargo.lock
+    - key: gcc-build
+      paths:
+        - build_*/
+
+
+check-rust-infra:
+  extends: .base
+  stage: test
+  script:
+    - rustup component add clippy
+    - cargo check
+    - cargo clippy
+  cache:
+    - key: rust-build
+      paths:
+        - target/
+        - .cargo-home/
+        - Cargo.lock
+
+push-public:
+  stage: deploy
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual
+  image: rust:1.88
+  script:
+    - git clone https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.com/oleg-shatov/hse-caos-public.git ../caos-public
+    - cargo xtask compose --in-path . --out-path ../caos-public --skip .git --stat
+    - git config --global user.name "Oleg Shatov"
+    - git config --global user.email "oleq.shatov@yandex.ru"
+    - |
+      cd ../caos-public &&
+      git add --all &&
+      git commit --allow-empty -m "Public files export" &&
+      git push https://caos:${PUSH_TO_PUBLIC_TOKEN}@gitlab.com/oleg-shatov/hse-caos-public.git HEAD:main
+  cache:
+    - key: rust-build
+      paths:
+        - target/
+        - .cargo-home/
+        - Cargo.lock
