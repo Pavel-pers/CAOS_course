@@ -79,18 +79,20 @@ push-public:
   #     when: manual
   #   - when: never
   script:
+    - apt-get update && apt-get install -y cmake
     - git config --global user.name "Oleg Shatov"
     - git config --global user.email "oleq.shatov@yandex.ru"
-    - caos_dir="$(mktemp -d)"
-    - trap "rm -rf $caos_dir" EXIT
-    - echo "Using $caos_dir for public repo"
-    - git clone https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.com/oleg-shatov/hse-caos-public.git "$caos_dir"
-    - cargo xtask compose --in-path . --out-path "$caos_dir" --skip .git --skip target --skip .cargo-home --stat
+    - public_dir="$(mktemp -d)"
+    - trap "rm -rf $public_dir" EXIT
+    - echo "Using $public_dir for public repo"
+    - git clone https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.com/oleg-shatov/hse-caos-public.git "$public_dir"
+    - cargo xtask compose --in-path . --out-path "$public_dir" --skip .git --skip target --skip .cargo-home --stat
+    - (cd $public_dir; ./common/tools/build_all_tasks.sh)
     - |
-      cd $caos_dir &&
+      (cd $public_dir &&
       git add --all &&
       git commit --allow-empty -m "Public files export" &&
-      git push https://caos:${PUSH_TO_PUBLIC_TOKEN}@gitlab.com/oleg-shatov/hse-caos-public.git HEAD:main
+      git push https://caos:${PUSH_TO_PUBLIC_TOKEN}@gitlab.com/oleg-shatov/hse-caos-public.git HEAD:main)
   cache:
     - key: rust-build
       paths:

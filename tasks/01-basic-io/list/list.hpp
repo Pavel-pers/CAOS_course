@@ -2,6 +2,8 @@
 
 #include <utility>
 
+#include <unused.hpp> // TODO: remove before flight.
+
 class List {
   public:
     // Non-copyable
@@ -30,12 +32,12 @@ class List {
     }
 
     void PushBack(int value) {
-        (void)value; // TODO: remove before flight.
+        UNUSED(value); // TODO: remove before flight.
         // TODO: your code here.
     }
 
     void PushFront(int value) {
-        (void)value; // TODO: remove before flight.
+        UNUSED(value); // TODO: remove before flight.
         // TODO: your code here.
     }
 
@@ -63,7 +65,7 @@ class List {
     }
 
     void Swap(List& other) {
-        (void)other; // TODO: remove before flight.
+        UNUSED(other); // TODO: remove before flight.
         // TODO: your code here.
     }
 
@@ -73,13 +75,13 @@ class List {
     // l1.Splice({4, 5, 6});
     // l1 == {1, 2, 3, 4, 5, 6};
     void Splice(List& other) {
-        (void)other; // TODO: remove before flight.
+        UNUSED(other); // TODO: remove before flight.
         // TODO: your code here.
     }
 
     template <class F>
     void ForEachElement(F&& f) const {
-        (void)f; // TODO: remove before flight.
+        UNUSED(f); // TODO: remove before flight.
         // TODO: your code here.
     }
 
