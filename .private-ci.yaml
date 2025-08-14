@@ -1,10 +1,3 @@
-variables:
-  # Instruct Docker not to start over TLS.
-  DOCKER_TLS_CERTDIR: ""
-  # Improve performance with overlayfs.
-  DOCKER_DRIVER: overlay2
-
-
 stages:
   - test
   - deploy
@@ -68,10 +61,6 @@ test-public-repo-build:
       git status &&
       git diff --stat &&
       git diff --color)
-  cache:
-    - key: public-repo-build
-      paths:
-        - build_*/
 
 push-public:
   extends: .base
@@ -102,4 +91,10 @@ build-container:
     - docker login -u domwst -p ${DOCKER_PAT}
     - docker build . -t domwst/caos-runner
     - docker push domwst/caos-runner
+  services:
+    - name: docker:dind
+      command: ["--tls=false"]
+  variables:
+    DOCKER_TLS_CERTDIR: ""
+    DOCKER_DRIVER: overlay2
 
