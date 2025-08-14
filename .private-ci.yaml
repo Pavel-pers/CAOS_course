@@ -70,8 +70,10 @@ test-public-repo-build:
       (cd $public_dir;
       ./common/tools/build_all_tasks.sh &&
       echo "Public diff:" &&
+      git add -N . &&
+      git status &&
       git diff --stat &&
-      git diff)
+      git diff --color)
 
 push-public:
   extends: .base
@@ -90,7 +92,7 @@ push-public:
     - cargo xtask compose --in-path . --out-path "$public_dir" --skip .git --skip target --skip .cargo-home --stat
     - |
       (cd $public_dir &&
-      git add --all &&
+      git add . &&
       git commit --allow-empty -m "Public files export" &&
       git push https://caos:${PUSH_TO_PUBLIC_TOKEN}@gitlab.com/oleg-shatov/hse-caos-public.git HEAD:main)
 
