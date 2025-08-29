@@ -1,23 +1,26 @@
 use std::{
-    collections::BTreeSet,
+    borrow::Cow,
+    collections::HashMap,
+    ffi::{OsStr, OsString},
     fs, io,
     path::{Path, PathBuf},
     process,
+    rc::Rc,
 };
 
+use crate::task::{
+    BuildProfile, ForbiddenPatterns, ForbiddenPatternsGroup, RunCmd, TaskContext, TestStep,
+};
 use crate::util::PathExt;
 use annotate_snippets::{Level, Renderer, Snippet, renderer};
-use anyhow::{Context, Result, anyhow, bail};
+use anyhow::{Context, Result, bail};
 use clap::Parser;
 use gix::{self, Repository};
-use globset::{Glob, GlobSetBuilder};
 use itertools::Itertools;
 use regex::Regex;
-use serde::{Deserialize, Serialize};
-use tap::Tap;
-use tracing::warn;
-use walkdir::WalkDir;
-use xshell::{Shell, cmd};
+use serde_json::Value as Json;
+use strum::IntoEnumIterator;
+use tracing::{info, warn};
 
 #[derive(Debug, Parser)]
 pub struct TestArgs {
@@ -26,67 +29,47 @@ pub struct TestArgs {
     build_only: bool,
 }
 
-const CONFIG_FILENAME: &str = "testing.yaml";
+struct ProfileRepresentations {
+    cmake_build_type: &'static str,
+    build_dir: &'static str,
+    short: &'static str,
+}
 
-#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
-#[serde(rename_all = "lowercase")]
-enum BuildProfile {
-    Release,
-    Debug,
-    ASan,
-    TSan,
+impl ProfileRepresentations {
+    fn new(cmake_build_type: &'static str, build_dir: &'static str, short: &'static str) -> Self {
+        ProfileRepresentations {
+            cmake_build_type,
+            build_dir,
+            short,
+        }
+    }
 }
 
 impl BuildProfile {
-    fn to_cmake_build_type(self) -> &'static str {
+    fn representations(self) -> ProfileRepresentations {
         use BuildProfile::*;
         match self {
-            Release => "Release",
-            Debug => "Debug",
-            ASan => "Asan",
-            TSan => "Tsan",
+            Release => ProfileRepresentations::new("Release", "build_release", "rel"),
+            Debug => ProfileRepresentations::new("Debug", "build_debug", "dbg"),
+            ASan => ProfileRepresentations::new("Asan", "build_asan", "asan"),
+            TSan => ProfileRepresentations::new("Tsan", "build_tsan", "tsan"),
         }
     }
 
-    fn to_build_dir(self) -> &'static str {
-        use BuildProfile::*;
-        match self {
-            Release => "build_release",
-            Debug => "build_debug",
-            ASan => "build_asan",
-            TSan => "build_tsan",
-        }
+    fn cmake_build_type(self) -> &'static str {
+        self.representations().cmake_build_type
     }
-}
 
-#[derive(Debug, Serialize, Deserialize)]
-struct CatchUnit {
-    profiles: Vec<BuildProfile>,
+    fn build_dir(self) -> &'static str {
+        self.representations().build_dir
+    }
 
-    bin: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct ForbiddenPatternsGroup {
-    #[serde(default)]
-    substring: Vec<String>,
-
-    #[serde(default)]
-    regex: Vec<String>,
-
-    #[serde(default)]
-    token: Vec<String>,
-
-    hint: Option<String>,
+    fn short(self) -> &'static str {
+        self.representations().short
+    }
 }
 
 impl ForbiddenPatternsGroup {
-    fn is_empty(&self) -> bool {
-        [&self.substring, &self.regex, &self.token]
-            .into_iter()
-            .all(Vec::is_empty)
-    }
-
     fn build_regex(&self) -> Result<Regex> {
         let substrings = self
             .substring
@@ -110,108 +93,64 @@ impl ForbiddenPatternsGroup {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-struct ForbiddenPatterns {
-    #[serde(default)]
-    groups: Vec<ForbiddenPatternsGroup>,
-
-    #[serde(flatten)]
-    patterns: Option<ForbiddenPatternsGroup>,
+#[derive(Debug)]
+struct RepoConfig {
+    tools: HashMap<&'static str, &'static str>,
+    repo_root: Rc<Path>,
 }
 
-impl ForbiddenPatterns {
-    fn groups(&self) -> impl Iterator<Item = &ForbiddenPatternsGroup> {
-        self.patterns
-            .iter()
-            .chain(&self.groups)
-            .filter(|g| !g.is_empty())
+impl RepoConfig {
+    fn new(repo_root: Rc<Path>) -> Self {
+        Self {
+            tools: HashMap::from_iter([
+                ("nej-runner", "common/tools/test.py"),
+                ("clang-fmt-runner", "common/tools/run-clang-format.py"),
+            ]),
+            repo_root,
+        }
     }
-}
 
-const fn default_retests_count() -> u16 {
-    1
-}
+    fn get_tool(&self, name: &str) -> Result<&'static str> {
+        self.tools
+            .get(name)
+            .copied()
+            .with_context(|| format!("tool {name} not found"))
+    }
 
-const fn default_retries_count() -> u16 {
-    1
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct NejudgeParams {
-    #[serde(default)]
-    extra_args: Vec<String>,
-
-    #[serde(default = "default_retests_count")]
-    retests_count: u16,
-
-    #[serde(default = "default_retries_count")]
-    retries_count: u16,
-
-    #[serde(default)]
-    checker: Option<String>,
-
-    #[serde(default)]
-    interactor: Option<String>,
-
-    solution: String,
-
-    profiles: Vec<BuildProfile>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "kebab-case")]
-enum TestStep {
-    CatchUnit(CatchUnit),
-    ForbiddenPatterns(ForbiddenPatterns),
-    Nejudge(NejudgeParams),
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct TestConfig {
-    tests: Vec<TestStep>,
-    editable: Vec<String>,
+    fn get_tool_path(&self, name: &str) -> Result<PathBuf> {
+        Ok(self.repo_root.join(self.get_tool(name)?))
+    }
 }
 
 #[derive(Debug)]
 struct TestContext {
     #[allow(dead_code)]
     repo: Repository,
-    repo_root: PathBuf,
-    /// Relative to project_root
-    task_path: PathBuf,
-    config: TestConfig,
+    repo_root: Rc<Path>,
+    repo_config: RepoConfig,
+    task_context: TaskContext,
     args: TestArgs,
-    shell: Shell,
 }
 
 impl TestContext {
     fn new(args: TestArgs) -> Result<Self> {
         let repo = gix::discover(".")?;
 
-        let cwd = fs::canonicalize(".")?;
+        let task_abs_path = fs::canonicalize(".")?;
         let repo_root = repo
             .workdir()
-            .ok_or_else(|| anyhow!("Failed to get working directory"))?
+            .context("failed to get working directory")?
             .canonicalize()?;
-        let task = cwd.strip_prefix_logged(&repo_root)?;
+        let repo_root = Rc::<Path>::from(repo_root);
 
-        let config_path = cwd.join(CONFIG_FILENAME);
-        let config_file = fs::OpenOptions::new()
-            .read(true)
-            .open(&config_path)
-            .with_context(|| format!("failed to open {}", config_path.display()))?;
-        let config = serde_yml::from_reader(config_file)
-            .with_context(|| format!("failed to parse {}", config_path.display()))?;
-
-        let shell = Shell::new().context("failed to create shell")?;
+        let task_context = TaskContext::new(&task_abs_path, Rc::clone(&repo_root))?;
 
         Ok(TestContext {
             repo,
+            repo_config: RepoConfig::new(Rc::clone(&repo_root)),
             repo_root,
-            task_path: task.to_owned(),
-            config,
+            task_context,
             args,
-            shell,
         })
     }
 
@@ -225,11 +164,8 @@ impl TestContext {
         cmd.arg("-B")
             .arg(build_dir)
             .arg("-S")
-            .arg(&self.repo_root)
-            .arg(format!(
-                "-DCMAKE_BUILD_TYPE={}",
-                profile.to_cmake_build_type()
-            ));
+            .arg(self.repo_root.as_ref())
+            .arg(format!("-DCMAKE_BUILD_TYPE={}", profile.cmake_build_type()));
         if fresh {
             cmd.arg("--fresh");
         }
@@ -237,7 +173,7 @@ impl TestContext {
     }
 
     fn build_target(&self, target: &str, profile: BuildProfile) -> Result<PathBuf> {
-        let build_dir = self.repo_root.join(profile.to_build_dir());
+        let build_dir = self.repo_root.join(profile.build_dir());
         if !build_dir.exists() {
             fs::create_dir(&build_dir)
                 .with_context(|| format!("failed to create {}", build_dir.display()))?;
@@ -271,88 +207,107 @@ impl TestContext {
         Ok(target_path)
     }
 
-    fn nejudge_runner_path(&self) -> PathBuf {
-        // TODO: Get this value from global config
-        // or get rid of this python script entirely
-        PathBuf::from_iter([&self.repo_root, Path::new("common/tools/test.py")])
-    }
-
-    fn task_root(&self) -> PathBuf {
-        PathBuf::from_iter([&self.repo_root, &self.task_path])
-    }
-
-    fn at_task_root<P: AsRef<Path>>(&self, p: P) -> PathBuf {
-        self.task_root().tap_mut(|root| root.push(p))
-    }
-
-    fn build_nejudge_infra(&self, target: &str) -> Result<PathBuf> {
-        if let Some(s) = target.strip_prefix("std:") {
-            return Ok(PathBuf::from(s));
+    fn run(self) -> Result<()> {
+        for step in &self.task_context.test_config.tests {
+            self.run_step(step)?;
         }
-        if let Some(s) = target.strip_prefix("build:") {
-            return self.build_target(s, BuildProfile::Release);
-        }
-        if let Some(s) = target.strip_prefix("direct:") {
-            return Ok(self.at_task_root(s));
-        }
-        // TODO: bail?
-        Ok(PathBuf::from(target))
+        self.check_format()?;
+        Ok(())
     }
 
-    fn run_nejudge_profile(&self, cfg: &NejudgeParams, profile: BuildProfile) -> Result<()> {
-        let interactor_path = cfg
-            .interactor
-            .as_ref()
-            .map(|path| self.build_nejudge_infra(path))
-            .transpose()?;
-        let checker_path = cfg
-            .checker
-            .as_ref()
-            .map(|checker| self.build_nejudge_infra(checker))
-            .transpose()?;
-        let solution_path = self.build_target(&cfg.solution, profile)?;
+    #[allow(clippy::type_complexity)]
+    fn cmd_arg_processors<'a>(
+        &'a self,
+    ) -> HashMap<
+        Cow<'static, str>,
+        Box<dyn Fn(&TestContext, BuildProfile, &str) -> Result<OsString> + 'a>,
+    > {
+        let mut processors = HashMap::<
+            Cow<'static, str>,
+            Box<dyn Fn(&TestContext, BuildProfile, &str) -> Result<OsString>>,
+        >::new();
+
+        let find_tool = {
+            |_: &TestContext, _: BuildProfile, arg: &str| {
+                Ok(self.repo_config.get_tool_path(arg)?.into())
+            }
+        };
+        processors.insert(Cow::from("tool"), Box::new(find_tool));
+
+        let local = |ctx: &TestContext, _: BuildProfile, arg: &str| -> Result<OsString> {
+            Ok(ctx.task_context.path_of(arg).into())
+        };
+        processors.insert(Cow::from("local"), Box::new(local));
+
+        let build = |ctx: &TestContext, profile: BuildProfile, target: &str| {
+            ctx.build_target(target, profile).map(Into::into)
+        };
+        processors.insert(Cow::from("build"), Box::new(build));
+
+        for profile in BuildProfile::iter() {
+            let build_profile = move |ctx: &TestContext, _: BuildProfile, target: &str| {
+                ctx.build_target(target, profile).map(Into::into)
+            };
+            processors.insert(
+                Cow::from(format!("build({})", profile.short())),
+                Box::new(build_profile),
+            );
+        }
+
+        processors
+    }
+
+    fn run_cmd_profile(&self, cfg: &RunCmd, profile: BuildProfile) -> Result<()> {
+        let process_cmd_arg = {
+            let processors = self.cmd_arg_processors();
+
+            let f: impl for<'a> Fn(&'a str) -> Result<Cow<'a, OsStr>> = move |arg: &str| {
+                let pos = if let Some(pos) = arg.find(':') {
+                    pos
+                } else {
+                    return Ok(Cow::from(OsStr::new(arg)));
+                };
+
+                let processor = &arg[..pos];
+                let arg = &arg[pos + 1..];
+
+                let processor = processors
+                    .get(processor)
+                    .with_context(|| format!("processor {} not found", processor))?;
+                processor(self, profile, arg).map(Cow::from)
+            };
+            f
+        };
+
+        let args = cfg
+            .cmd
+            .iter()
+            .map(|p| process_cmd_arg(p))
+            .collect::<Result<Vec<_>, _>>()?;
 
         if self.args.build_only {
             return Ok(());
         }
 
-        let runner_path = self.nejudge_runner_path();
-        let mut cmd = vec![runner_path.to_str_logged()?];
-
-        for (flag, value) in [
-            ("--checker", &checker_path),
-            ("--interactor", &interactor_path),
-        ] {
-            let path = match value {
-                Some(v) => v,
-                None => continue,
-            };
-            cmd.extend([flag, path.to_str_logged()?]);
+        if cfg.echo {
+            info!("Running {}", args.iter().map(|s| s.display()).join(" "));
         }
 
-        let retests_count = format!("{}", cfg.retests_count);
-        cmd.extend(["--retests-count", &retests_count]);
+        let bin = args.first().context("no cmd was given")?;
 
-        let retries_count = format!("{}", cfg.retries_count);
-        cmd.extend(["--retries-count", &retries_count]);
+        let mut cmd = process::Command::new(bin);
+        for arg in &args[1..] {
+            cmd.arg(arg);
+        }
 
-        cmd.extend(["--run-cmd", solution_path.to_str_logged()?]);
-
-        cmd!(self.shell, "python3 {cmd...}").run()?;
+        cmd.status()?.exit_ok()?;
 
         Ok(())
     }
 
-    fn run_nejudge(&self, cfg: &NejudgeParams) -> Result<()> {
+    fn run_cmd(&self, cfg: &RunCmd) -> Result<()> {
         for &profile in &cfg.profiles {
-            self.run_nejudge_profile(cfg, profile)?;
-        }
-        Ok(())
-    }
-
-    fn run(self) -> Result<()> {
-        for step in &self.config.tests {
-            self.run_step(step)?;
+            self.run_cmd_profile(cfg, profile)?;
         }
         Ok(())
     }
@@ -361,54 +316,9 @@ impl TestContext {
         use TestStep::*;
 
         match step {
-            CatchUnit(cfg) => self.run_unit(cfg),
             ForbiddenPatterns(cfg) => self.check_forbidden_patterns(cfg),
-            Nejudge(cfg) => self.run_nejudge(cfg),
+            RunCmd(cfg) => self.run_cmd(cfg),
         }
-    }
-
-    fn run_unit(&self, cfg: &CatchUnit) -> Result<()> {
-        for &profile in &cfg.profiles {
-            let path = self.build_target(&cfg.bin, profile)?;
-            if self.args.build_only {
-                continue;
-            }
-            cmd!(self.shell, "{path}").run()?;
-        }
-
-        Ok(())
-    }
-
-    fn find_editable_files(&self) -> Result<BTreeSet<PathBuf>> {
-        let task_path = self.repo_root.join(&self.task_path);
-        let is_editable = {
-            let mut builder = GlobSetBuilder::new();
-            for path in &self.config.editable {
-                builder.add(
-                    Glob::new(path)
-                        .with_context(|| format!("creating glob pattern from \"{path}\""))?,
-                );
-            }
-            builder.build().context("creating globset")?
-        };
-
-        let mut editable = BTreeSet::new();
-
-        for item in WalkDir::new(&task_path).into_iter().filter_entry(|entry| {
-            entry.file_type().is_dir()
-                || entry
-                    .path()
-                    .strip_prefix(&task_path)
-                    .map(|p| is_editable.is_match(p))
-                    .unwrap_or(false)
-        }) {
-            let item = item?;
-            if item.file_type().is_dir() {
-                continue;
-            }
-            editable.insert(item.path().to_path_buf());
-        }
-        Ok(editable)
     }
 
     fn check_forbidden_patterns_file<'a>(
@@ -463,9 +373,9 @@ impl TestContext {
                 let local_end = span_end - snippet_start;
                 let local_span = local_start..local_end;
 
-                let local_path = path
-                    .strip_prefix_logged(&self.repo_root)?
-                    .strip_prefix_logged(&self.task_path)?
+                let local_path = self
+                    .task_context
+                    .strip_task_root_logged(path)?
                     .to_str_logged()?;
 
                 let mut snip = Snippet::source(snippet_str)
@@ -487,7 +397,7 @@ impl TestContext {
     fn check_forbidden_patterns(&self, cfg: &ForbiddenPatterns) -> Result<()> {
         const MAX_MESSAGES: usize = 20;
 
-        let editable_files = self.find_editable_files()?;
+        let editable_files = self.task_context.find_editable_files()?;
         let mut messages = vec![];
         let editable_files_content = editable_files
             .iter()
@@ -517,13 +427,88 @@ impl TestContext {
         }
 
         if MAX_MESSAGES < messages_count {
-            anstream::println!(
-                "NOTE: Showing only first {MAX_MESSAGES} out of {}",
+            warn!(
+                "Showing only first {MAX_MESSAGES} out of {}",
                 messages_count
             );
         }
 
         bail!("{} forbidden patters found in your files", messages_count);
+    }
+
+    fn major_clang_format_version() -> Result<u8> {
+        let out = process::Command::new("clang-format")
+            .arg("--version")
+            .output()
+            .map_err(anyhow::Error::from)
+            .and_then(|o| o.exit_ok().map_err(From::from))
+            .context("running clang-format")?;
+
+        let out = String::try_from(out.stdout).context("parsing clang-format output")?;
+
+        let re = Regex::new(r"\d+")?;
+        let major = re
+            .find(&out)
+            .context("no version in clang-format output")?
+            .as_str()
+            .parse()?;
+        Ok(major)
+    }
+
+    fn check_format(&self) -> Result<()> {
+        const MINIMAL_SUPPORTED: u8 = 11;
+        const DESIRED: u8 = 15;
+
+        let solution_files = self.task_context.find_editable_files()?;
+        if solution_files.is_empty() {
+            warn!("No solution files were found. Skipping formatting step");
+            return Ok(());
+        }
+
+        let version = Self::major_clang_format_version()?;
+        let mut use_old = false;
+        if version < MINIMAL_SUPPORTED {
+            bail!(
+                "Your version of clang-format ({}) is less than minimal supported ({}). Consider upgrading it",
+                version,
+                MINIMAL_SUPPORTED
+            );
+        }
+        if version < DESIRED {
+            warn!(
+                "Your version of clang-format ({}) is less than desired ({}). Going to use convervative config. Consider upgrading clang-format",
+                version, DESIRED
+            );
+            use_old = true;
+        }
+
+        let fmt_runner = self.repo_config.get_tool_path("clang-fmt-runner")?;
+
+        let mut cmd = process::Command::new("python3");
+        cmd.arg(fmt_runner);
+
+        if use_old {
+            let old_config_path = self.repo_root.join(".clang-format-11");
+            let f = fs::File::open(&old_config_path)
+                .with_context(|| format!("failed to open {}", old_config_path.display()))?;
+            let f = io::BufReader::new(f);
+            let cfg: Json = serde_yml::from_reader(f)
+                .with_context(|| format!("failed to parse {}", old_config_path.display()))?;
+            let cfg = serde_json::to_string(&cfg)?;
+
+            cmd.arg("--style").arg(cfg);
+        } else {
+            cmd.arg(format!(
+                "--style=file:{}/.clang-format",
+                self.repo_root.display()
+            ));
+        }
+
+        cmd.args(solution_files);
+
+        cmd.status()?.exit_ok()?;
+
+        Ok(())
     }
 }
 

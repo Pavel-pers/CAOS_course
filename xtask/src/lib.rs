@@ -4,5 +4,6 @@
 
 mod compose;
 pub mod dispatch;
+mod task;
 mod test;
 mod util;

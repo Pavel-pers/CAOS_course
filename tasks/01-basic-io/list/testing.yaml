@@ -1,15 +1,15 @@
 tests:
-  - type: catch-unit
+  - type: run-cmd
+    cmd: [build:test_list]
     profiles:
       - debug
       - asan
-    bin: test_list
   - type: forbidden-patterns
     token:
       - <list>
       - <queue>
       - <deque>
       - <vector>
-    hint: "Implement linked list yourself"
+    hint: "Implement linked list"
 editable:
   - list.hpp

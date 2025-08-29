@@ -2,7 +2,9 @@ FROM rustlang/rust:nightly-slim
 
 WORKDIR /public
 
-RUN apt-get update && apt-get install -y cmake git clang-19
+RUN apt-get update && apt-get install -y \
+    cmake git clang-19 clang-format && \
+    apt-get clean
 
 RUN update-alternatives --install /usr/bin/cc cc $(which clang-19) 30
 RUN update-alternatives --install /usr/bin/c++ c++ $(which clang++-19) 30

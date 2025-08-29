@@ -1,7 +1,7 @@
 tests:
-  - type: catch-unit
+  - type: run-cmd
+    cmd: [build:test_a_plus_b]
     profiles:
       - debug
-    bin: test_a_plus_b
 editable:
   - a-plus-b.cpp

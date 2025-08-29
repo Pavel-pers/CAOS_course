@@ -10,8 +10,8 @@ itertools = { version = "0.14" }
 globset = { version = "0.4" }
 serde = { version = "1.0", features = ["derive"] }
 serde_yml = { version = "0.0" }
+serde_json = { version = "1.0" }
 gix = { version = "0.73" }
-xshell = { version = "0.2" }
 num_cpus = { version = "1.17" }
 anstream = { version = "0.6.19" }
 annotate-snippets = { version = "0.11" }
@@ -20,3 +20,5 @@ regex = { version = "1.10" }
 tracing = { version = "0.1" }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tap = { version = "1" }
+strum = { version = "0.27" }
+strum_macros = { version = "0.27" }

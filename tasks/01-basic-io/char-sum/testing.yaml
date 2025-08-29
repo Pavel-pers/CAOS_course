@@ -1,7 +1,6 @@
 tests:
-  - type: nejudge
-    solution: solution_char_sum
-    checker: std:cmp
+  - type: run-cmd
+    cmd: [tool:nej-runner, --checker, cmp, --run-cmd, build:solution_char_sum]
     profiles:
       - asan
       - release

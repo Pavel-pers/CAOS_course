@@ -213,7 +213,7 @@ fn process_source(src: String) -> Result<ProcessedSource> {
 
             if let Some(stub) = stub {
                 insert_line(stub);
-                dst.push_str(" // TODO: remove before flight.\n");
+                dst.push_str("  // TODO: remove before flight.\n");
             } else {
                 insert_line("// TODO: your code here.\n");
                 if unimpl {
@@ -282,9 +282,7 @@ impl Compose {
 
         if args.gitignore {
             let gitignore_path = PathBuf::from_iter([&args.in_path, Path::new(".gitignore")]);
-            let f = fs::OpenOptions::new()
-                .read(true)
-                .open(&gitignore_path)
+            let f = fs::File::open(&gitignore_path)
                 .with_context(|| format!("Failed to open file {}", gitignore_path.display()))?;
 
             for line in io::BufReader::new(f)
@@ -356,7 +354,7 @@ impl Compose {
         let export_config = Path::new(".export.yaml");
         let path = PathBuf::from_iter([dir, export_config]);
 
-        let f = fs::OpenOptions::new().read(true).open(&path);
+        let f = fs::File::open(&path);
         let f = match f {
             Ok(f) => f,
             Err(e) => match e.kind() {

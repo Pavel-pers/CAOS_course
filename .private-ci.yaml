@@ -81,8 +81,8 @@ test-public-repo-build:
       echo "Public diff:" &&
       git add -N . &&
       git status &&
-      git diff --stat &&
-      git diff --color)
+      git diff --color &&
+      git diff --stat)
 
 .publish-base:
   extends: .base
