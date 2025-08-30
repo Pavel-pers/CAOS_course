@@ -74,7 +74,7 @@ impl MoveContext {
                 let file_target = ctx_to.path_of(file_local);
                 info!("Copying {}", file_local.display());
                 if let Some(dir) = file_target.parent() {
-                    fs::create_dir(dir)?;
+                    fs::create_dir_all(dir)?;
                 }
                 fs::copy(file_source, file_target)?;
             }
