@@ -120,6 +120,10 @@ impl TaskContext {
         })
     }
 
+    pub fn is_task(path: &Path) -> Result<bool> {
+        Ok(fs::metadata(path.join(TESTING_CONFIG_FILENAME))?.is_file())
+    }
+
     pub(crate) fn full_path(&self) -> PathBuf {
         self.repo_root.join(&self.task_path)
     }
@@ -134,7 +138,7 @@ impl TaskContext {
     }
 
     pub(crate) fn find_editable_files(&self) -> Result<BTreeSet<PathBuf>> {
-        let task_path = self.full_path();
+        let full_task_path = self.full_path();
         let is_editable = {
             let mut builder = GlobSetBuilder::new();
             for path in &self.test_config.editable {
@@ -148,14 +152,17 @@ impl TaskContext {
 
         let mut editable = BTreeSet::new();
 
-        for item in WalkDir::new(&task_path).into_iter().filter_entry(|entry| {
-            entry.file_type().is_dir()
-                || entry
-                    .path()
-                    .strip_prefix(&task_path)
-                    .map(|p| is_editable.is_match(p))
-                    .unwrap_or(false)
-        }) {
+        for item in WalkDir::new(&full_task_path)
+            .into_iter()
+            .filter_entry(|entry| {
+                entry.file_type().is_dir()
+                    || entry
+                        .path()
+                        .strip_prefix(&full_task_path)
+                        .map(|p| is_editable.is_match(p))
+                        .unwrap_or(false)
+            })
+        {
             let item = item?;
             if item.file_type().is_dir() {
                 continue;

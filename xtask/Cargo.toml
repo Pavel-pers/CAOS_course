@@ -14,7 +14,7 @@ serde_json = { version = "1.0" }
 gix = { version = "0.73" }
 num_cpus = { version = "1.17" }
 anstream = { version = "0.6.19" }
-annotate-snippets = { version = "0.11" }
+annotate-snippets = { version = "0.12" }
 walkdir = { version = "2.5" }
 regex = { version = "1.10" }
 tracing = { version = "0.1" }

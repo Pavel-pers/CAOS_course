@@ -6,235 +6,19 @@ from pathlib import Path
 import argparse
 import subprocess
 import os
-import re
 import shlex
-import glob
 import time
 try:
     from functools import cache
 except ImportError:
     def cache(func):
         return func
-from typing import Optional, Tuple, Any, cast
+from typing import Optional, Any, cast
 import difflib
-import json
 import shutil
 import resource
 
 repo_root = Path(os.path.realpath(__file__)).parent.parent.parent
-
-
-def check_ban(regex_filter, text, name='common', reason=None) -> bool:
-    found = regex_filter.search(text)
-    if found:
-        descr = f'\nReason: {reason}' if reason else f' ({name.lower()})'
-        print(f"Found banned sequence '{found[0].strip()}' by {repr(regex_filter.pattern)}{descr}\n")
-        return False
-    return True
-
-
-def check_req(regex_filter, text, name, reason=None) -> bool:
-    found = regex_filter.search(text)
-    if not found:
-        pre_descr = f' {name.lower()}' if not reason else ''
-        post_descr = f'\nReason: {reason}' if reason else ''
-        print(f"Did not find required sequence {pre_descr} {repr(regex_filter.pattern)} {post_descr}\n")
-        return False
-    return True
-
-
-def extract_solution_without_includes(file: str) -> str:
-    lines = []
-    with open(file, 'r') as f:
-        for i, orig_line in enumerate(f):
-            line = orig_line.strip()
-            if line.startswith('#include') or line.startswith('#define') or line.startswith('#pragma'):
-                continue
-            elif line.startswith('#'):
-                raise RuntimeError(f'Line markers are not allowed. Bad line {i}: {repr(line)}')
-            else:
-                lines.append(orig_line)
-    return ''.join(lines)
-
-
-def preprocess(file: str):
-    compiler_cmd = 'g++' if file.endswith('.cpp') else 'gcc'  # Not sure if there's any difference
-    proc = subprocess.run([compiler_cmd, '-E', '-'], input=extract_solution_without_includes(file).encode(),
-                          capture_output=True)
-    if proc.returncode != 0:
-        print('Preprocessor returned error:')
-        try:
-            print(proc.stderr.decode())
-        except UnicodeError:
-            print(proc.stderr)
-        exit(1)
-
-    try:
-        preprocessed = proc.stdout.decode()
-    except UnicodeError:
-        print('Source is binary')
-        exit(1)
-
-    lines = []
-    in_source = False
-    source_found = False
-    for i, line in enumerate(preprocessed.splitlines(keepends=True)):
-        m = re.match(r'# \d+ "(.+?)"', line)
-        if m:
-            # There still may be multiple <stdin> line markers,
-            # e.g. if there are some comment-only lines which are stripped by the preprocessor (but not always?)
-            filename = m.group(1)
-            if filename == '<stdin>':
-                in_source = True
-                source_found = True
-            else:
-                in_source = False
-        elif in_source:
-            lines.append(line)
-
-    if not source_found:
-        raise RuntimeError('<stdin> line markers were not found in preprocessed source:\n'
-                           f'\n==========\n{preprocessed}\n==========')
-    return ''.join(lines)
-
-
-@cache
-def get_source(source_file: str, use_preprocessor_: bool = True) -> str:
-    if use_preprocessor_:
-        return preprocess(source_file)
-    else:
-        with open(source_file, 'r') as f:
-            return f.read()
-
-
-def check(source_file, regex_str, check_func, **extra) -> bool:
-    text = get_source(source_file)
-    flags = 0
-    flags |= re.IGNORECASE
-    flags |= re.DOTALL
-    regex_filter = re.compile(regex_str, flags)
-    try:
-        return check_func(regex_filter, text, **extra)
-    except Exception as e:
-        raise RuntimeError(f'Check failed int file {source_file}') from e
-
-
-def split_reason(regex: str) -> Tuple[str, Optional[str]]:
-    parts = regex.rsplit(';;', 1)
-    if len(parts) == 1:
-        return parts[0], None
-    elif len(parts) != 2:
-        raise RuntimeError("Incorrect val " + regex)
-    return parts  # type: ignore
-
-
-def load_legacy_clang_format_file() -> str:
-    def parse_value(s: str) -> bool | int | str:
-        bools = {
-            'true': True,
-            'false': False,
-        }
-        if (v := bools.get(s, None)) is not None:
-            return v
-        try:
-            return int(s)
-        except Exception:
-            pass
-        return s
-
-    with open(repo_root / '.clang-format-11') as f:
-        lines = (line.strip().split(": ") for line in f.readlines() if not line.startswith('#'))
-        return json.dumps({k: parse_value(v) for k, v in lines})
-
-
-def check_clang_format_version(source_file: str, format_file: str) -> list[str]:
-    def helper(msg):
-        print(f'Clang-format minimal required {required_version}. Suggested 15')
-        print('To install on debian run: `apt install clang-format`')
-        print()
-        print('If default version is lower than required \n'
-              '  install specified version that can be found by \n'
-              '  `apt-cache search clang-format`')
-        print('After installation link this version to clang-format. \n'
-              '  For 12: \n'
-              '  `ln -s /usr/bin/clang-format-12 /usr/local/bin/clang-format`')
-        raise RuntimeError(msg)
-    args = ['clang-format', '--version']
-    proc = subprocess.run(args, capture_output=True)
-    required_version = 11
-    suggested_version = 15
-    if proc.returncode != 0:
-        helper('clang-format is not installed!!!')
-    version = re.findall(r'\d+', proc.stdout.decode())
-    if not version:
-        helper('Unable to parse version from "' + proc.stdout.decode() + '"')
-    major = int(version[0])
-    if major < required_version:
-        helper(f'clang-format version {major} is not supported')
-    if major < suggested_version:
-        print("WARNING: Using legacy clang-format file.")
-        return ['python3', f'{repo_root}/common/tools/run-clang-format.py', '--style', load_legacy_clang_format_file(), source_file]
-    return ['python3', f'{repo_root}/common/tools/run-clang-format.py', '--style', f'file:{format_file}', source_file]
-
-
-def run_clang_format(source_file: str, format_file: str, ci: bool):
-    if ci:
-        return
-    args = check_clang_format_version(source_file, format_file)
-    proc = subprocess.run(args, capture_output=True)
-    if proc.returncode == 0:
-        return
-    print('Clang-format returned error(s):')
-    try:
-        print(proc.stderr.decode())
-    except UnicodeError:
-        print(proc.stderr)
-    try:
-        print(proc.stdout.decode())
-    except UnicodeError:
-        print(proc.stdout)
-    if ci:
-        raise RuntimeError("Clang-format not passed")
-    fix = input('Clang-format is not passed. Fix code? (Y/n)')
-    if fix and fix.lower() not in ('y', 'yes'):
-        raise RuntimeError("Clang-format not passed")
-    args.append('-i')
-    proc = subprocess.run(args, capture_output=True)
-    if proc.returncode == 0:
-        return
-    raise RuntimeError(f"Unexpected failure while fixing code {proc.returncode}")
-
-
-def check_style(source_file_wildcard: str, ci: bool):
-    for source_file in glob.glob(source_file_wildcard):
-        if source_file.endswith('.bak'):
-            continue
-        if not os.path.isfile(source_file):
-            print("WARNING:", source_file, "is not valid source file")
-            continue
-        formattable_extensions = [".c", ".h", ".cpp", ".hpp"]
-        if any(map(source_file.endswith, formattable_extensions)):
-            clang_format_file = repo_root / '.clang-format'
-            if clang_format_file.is_file():
-                run_clang_format(source_file, str(clang_format_file), ci)
-
-        regex_checks_passed = True
-        regex_filter = os.environ.get('EJ_BAN_BY_REGEX', '')
-        if regex_filter:
-            regex_filter, reason = split_reason(regex_filter)
-            regex_checks_passed &= check(source_file, regex_filter, check_ban, reason=reason)
-
-        for key, value in os.environ.items():
-            if key.startswith('EJ_BAN_BY_REGEX_REQ_'):
-                value, reason = split_reason(value)
-                value = value.replace(' ', r'\s+')
-                regex_checks_passed &= check(source_file, value, check_req, name=key[len('EJ_BAN_BY_REGEX_REQ_'):], reason=reason)
-            elif key.startswith('EJ_BAN_BY_REGEX_BAN_'):
-                value, reason = split_reason(value)
-                value = value.replace(' ', r'\s+')
-                regex_checks_passed &= check(source_file, value, check_ban, name=key[len('EJ_BAN_BY_REGEX_BAN_'):], reason=reason)
-        if not regex_checks_passed:
-            raise RuntimeError(f"Regex check failed in file {source_file}")
 
 
 def get_child_pid(pid: int) -> int:
@@ -648,8 +432,6 @@ if is_pipeline:
     args.may_fail_local = []
 else:
     args.user = None
-
-check_style(args.source_file, is_pipeline)
 
 for cnt in range(args.retests_count):
     print(f"Trying tests #{cnt}")

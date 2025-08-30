@@ -12,7 +12,7 @@ use crate::task::{
     BuildProfile, ForbiddenPatterns, ForbiddenPatternsGroup, RunCmd, TaskContext, TestStep,
 };
 use crate::util::PathExt;
-use annotate_snippets::{Level, Renderer, Snippet, renderer};
+use annotate_snippets::{Annotation, AnnotationKind, Group, Level, Renderer, Snippet, renderer};
 use anyhow::{Context, Result, bail};
 use clap::Parser;
 use gix::{self, Repository};
@@ -29,43 +29,27 @@ pub struct TestArgs {
     build_only: bool,
 }
 
-struct ProfileRepresentations {
-    cmake_build_type: &'static str,
-    build_dir: &'static str,
-    short: &'static str,
-}
-
-impl ProfileRepresentations {
-    fn new(cmake_build_type: &'static str, build_dir: &'static str, short: &'static str) -> Self {
-        ProfileRepresentations {
-            cmake_build_type,
-            build_dir,
-            short,
-        }
-    }
-}
-
 impl BuildProfile {
-    fn representations(self) -> ProfileRepresentations {
+    fn representations(self) -> (&'static str, &'static str, &'static str) {
         use BuildProfile::*;
         match self {
-            Release => ProfileRepresentations::new("Release", "build_release", "rel"),
-            Debug => ProfileRepresentations::new("Debug", "build_debug", "dbg"),
-            ASan => ProfileRepresentations::new("Asan", "build_asan", "asan"),
-            TSan => ProfileRepresentations::new("Tsan", "build_tsan", "tsan"),
+            Release => ("Release", "build_release", "rel"),
+            Debug => ("Debug", "build_debug", "dbg"),
+            ASan => ("Asan", "build_asan", "asan"),
+            TSan => ("Tsan", "build_tsan", "tsan"),
         }
     }
 
     fn cmake_build_type(self) -> &'static str {
-        self.representations().cmake_build_type
+        self.representations().0
     }
 
     fn build_dir(self) -> &'static str {
-        self.representations().build_dir
+        self.representations().1
     }
 
     fn short(self) -> &'static str {
-        self.representations().short
+        self.representations().2
     }
 }
 
@@ -326,7 +310,7 @@ impl TestContext {
         cfg: &'a ForbiddenPatterns,
         path: &'a Path,
         text: &'a str,
-    ) -> Result<Vec<annotate_snippets::Message<'a>>> {
+    ) -> Result<Vec<Snippet<'a, Annotation<'a>>>> {
         const ERROR_CTX: usize = 1;
 
         let line_starts = text.lines().scan(0, |state, line| {
@@ -344,10 +328,11 @@ impl TestContext {
             }
         };
 
-        let mut messages = vec![];
+        let mut messages = Vec::new();
 
         for group in cfg.groups() {
             let re = group.build_regex()?;
+            let hint = group.hint.as_deref().unwrap_or("Here");
 
             for caps in re.captures_iter(text) {
                 let target = caps
@@ -380,14 +365,11 @@ impl TestContext {
 
                 let mut snip = Snippet::source(snippet_str)
                     .line_start(first_line + 1)
-                    .origin(local_path)
-                    .annotation(Level::Error.span(local_span.clone()).label(""));
-                if let Some(ref hint) = group.hint {
-                    snip = snip.annotation(Level::Help.span(local_span).label(hint));
-                }
+                    .path(local_path)
+                    .annotation(AnnotationKind::Primary.span(local_span.clone()));
+                snip = snip.annotation(AnnotationKind::Context.span(local_span).label(hint));
 
-                let msg = Level::Error.title("Found forbidden pattern").snippet(snip);
-                messages.push(msg);
+                messages.push(snip);
             }
         }
 
@@ -422,9 +404,13 @@ impl TestContext {
         let messages_count = messages.len();
         let renderer = Renderer::styled().help(renderer::AnsiColor::BrightBlue.on_default().bold());
 
+        let mut group = Group::with_title(Level::ERROR.primary_title("Found forbidden patterns"));
+
         for m in messages.into_iter().take(MAX_MESSAGES) {
-            anstream::println!("{}", renderer.render(m));
+            group = group.element(m);
         }
+
+        anstream::println!("{}", renderer.render(&[group]));
 
         if MAX_MESSAGES < messages_count {
             warn!(

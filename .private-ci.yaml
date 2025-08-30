@@ -62,6 +62,7 @@ check-rust-infra:
   extends: .base
   stage: test
   script:
+    - cargo fmt --check
     - cargo check
     - cargo clippy
 

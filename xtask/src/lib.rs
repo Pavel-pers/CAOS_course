@@ -4,6 +4,7 @@
 
 mod compose;
 pub mod dispatch;
+mod r#move;
 mod task;
 mod test;
 mod util;
