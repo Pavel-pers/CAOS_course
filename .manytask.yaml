@@ -1,0 +1,32 @@
+version: 1
+
+
+ui:
+  task_url_template: https://gitlab.com/oleg-shatov/hse-caos-public/-/tree/main/tasks/$GROUP_NAME/$TASK_NAME
+
+  links:
+    "TG Channel": https://youtu.be/dQw4w9WgXcQ
+    "TG Chat": https://youtu.be/dQw4w9WgXcQ
+
+
+deadlines:
+  timezone: Europe/Moscow
+
+  deadlines: interpolate  # hard/interpolate
+  max_submissions: 100
+
+  schedule:
+    - group: 01-basic-io
+      start: 2025-08-30 10:00
+      steps:
+        1.0: 2025-08-31 10:00
+        0.5: 2025-09-02 10:00
+      end: 2025-09-03 23:59
+      enabled: true
+      tasks:
+        - task: a-plus-b
+          score: 10
+        - task: char-sum
+          score: 10
+        - task: list
+          score: 20
