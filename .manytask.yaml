@@ -17,8 +17,8 @@ deadlines:
     - group: 01-basic-io
       start: 2025-08-30 10:00
       steps:
-        1.0: 2025-08-31 10:00
-        0.5: 2025-09-02 10:00
+        1.0: 1d
+        0.5: 3d
       end: 2025-09-03 23:59
       enabled: true
       tasks:
@@ -28,3 +28,18 @@ deadlines:
           score: 10
         - task: list
           score: 20
+
+grades:
+  grades:
+    10: [{ percent: 95 }]
+    9: [{ percent: 85 }]
+    8: [{ percent: 75 }]
+    7: [{ percent: 65 }]
+    6: [{ percent: 55 }]
+    5: [{ percent: 45 }]
+    4: [{ percent: 35 }]
+    3: [{ percent: 25 }]
+    2: [{ percent: 15 }]
+    1: [{ percent: 5 }]
+    0: [{ percent: 0 }]
+
