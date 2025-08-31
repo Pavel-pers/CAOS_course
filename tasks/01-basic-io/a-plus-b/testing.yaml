@@ -3,5 +3,7 @@ tests:
     cmd: [build:test_a_plus_b]
     profiles:
       - debug
+  - type: report-score
+    task: a-plus-b
 editable:
   - a-plus-b.cpp

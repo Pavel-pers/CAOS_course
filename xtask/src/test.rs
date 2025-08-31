@@ -8,17 +8,22 @@ use std::{
     rc::Rc,
 };
 
-use crate::task::{
-    BuildProfile, ForbiddenPatterns, ForbiddenPatternsGroup, RunCmd, TaskContext, TestStep,
+use crate::{
+    task::ReportScore,
+    util::{ManytaskClient, PathExt},
 };
-use crate::util::PathExt;
+use crate::{
+    task::{
+        BuildProfile, ForbiddenPatterns, ForbiddenPatternsGroup, RunCmd, TaskContext, TestStep,
+    },
+    util::ClangFmtRunner,
+};
 use annotate_snippets::{Annotation, AnnotationKind, Group, Level, Renderer, Snippet, renderer};
 use anyhow::{Context, Result, bail};
 use clap::Parser;
 use gix::{self, Repository};
 use itertools::Itertools;
 use regex::Regex;
-use serde_json::Value as Json;
 use strum::IntoEnumIterator;
 use tracing::{info, warn};
 
@@ -81,6 +86,9 @@ impl ForbiddenPatternsGroup {
 struct RepoConfig {
     tools: HashMap<&'static str, &'static str>,
     repo_root: Rc<Path>,
+    manytask_url: &'static str,
+    tester_token: Option<String>,
+    manytask_course_name: &'static str,
 }
 
 impl RepoConfig {
@@ -91,6 +99,9 @@ impl RepoConfig {
                 ("clang-fmt-runner", "common/tools/run-clang-format.py"),
             ]),
             repo_root,
+            manytask_url: "https://manytask.kek.today",
+            tester_token: std::env::var("TESTER_TOKEN").ok(),
+            manytask_course_name: "hse-caos-2025",
         }
     }
 
@@ -114,6 +125,7 @@ struct TestContext {
     repo_config: RepoConfig,
     task_context: TaskContext,
     args: TestArgs,
+    manytask_client: Option<ManytaskClient>,
 }
 
 impl TestContext {
@@ -126,15 +138,23 @@ impl TestContext {
             .context("failed to get working directory")?
             .canonicalize()?;
         let repo_root = Rc::<Path>::from(repo_root);
+        let repo_config = RepoConfig::new(Rc::clone(&repo_root));
 
         let task_context = TaskContext::new(&task_abs_path, Rc::clone(&repo_root))?;
 
+        let manytask_client = if let Some(ref token) = repo_config.tester_token {
+            Some(ManytaskClient::new(repo_config.manytask_url, token)?)
+        } else {
+            None
+        };
+
         Ok(TestContext {
             repo,
-            repo_config: RepoConfig::new(Rc::clone(&repo_root)),
+            repo_config,
             repo_root,
             task_context,
             args,
+            manytask_client,
         })
     }
 
@@ -279,12 +299,10 @@ impl TestContext {
 
         let bin = args.first().context("no cmd was given")?;
 
-        let mut cmd = process::Command::new(bin);
-        for arg in &args[1..] {
-            cmd.arg(arg);
-        }
-
-        cmd.status()?.exit_ok()?;
+        process::Command::new(bin)
+            .args(&args[1..])
+            .status()?
+            .exit_ok()?;
 
         Ok(())
     }
@@ -296,12 +314,37 @@ impl TestContext {
         Ok(())
     }
 
+    fn report_score(&self, cfg: &ReportScore) -> Result<()> {
+        let client = if let Some(ref client) = self.manytask_client {
+            client
+        } else {
+            info!("Not in CI score wouldn't be reported");
+            return Ok(());
+        };
+
+        let user = if let Ok(username) = std::env::var("GITLAB_USER_LOGIN") {
+            username
+        } else {
+            info!("No username so score wouldn't be reported");
+            return Ok(());
+        };
+
+        client.report_score_with_retries(
+            self.repo_config.manytask_course_name,
+            &user,
+            &cfg.task,
+        )?;
+
+        Ok(())
+    }
+
     fn run_step(&self, step: &TestStep) -> Result<()> {
         use TestStep::*;
 
         match step {
             ForbiddenPatterns(cfg) => self.check_forbidden_patterns(cfg),
             RunCmd(cfg) => self.run_cmd(cfg),
+            ReportScore(cfg) => self.report_score(cfg),
         }
     }
 
@@ -422,79 +465,16 @@ impl TestContext {
         bail!("{} forbidden patters found in your files", messages_count);
     }
 
-    fn major_clang_format_version() -> Result<u8> {
-        let out = process::Command::new("clang-format")
-            .arg("--version")
-            .output()
-            .map_err(anyhow::Error::from)
-            .and_then(|o| o.exit_ok().map_err(From::from))
-            .context("running clang-format")?;
-
-        let out = String::try_from(out.stdout).context("parsing clang-format output")?;
-
-        let re = Regex::new(r"\d+")?;
-        let major = re
-            .find(&out)
-            .context("no version in clang-format output")?
-            .as_str()
-            .parse()?;
-        Ok(major)
-    }
-
     fn check_format(&self) -> Result<()> {
-        const MINIMAL_SUPPORTED: u8 = 11;
-        const DESIRED: u8 = 15;
-
         let solution_files = self.task_context.find_editable_files()?;
         if solution_files.is_empty() {
             warn!("No solution files were found. Skipping formatting step");
             return Ok(());
         }
 
-        let version = Self::major_clang_format_version()?;
-        let mut use_old = false;
-        if version < MINIMAL_SUPPORTED {
-            bail!(
-                "Your version of clang-format ({}) is less than minimal supported ({}). Consider upgrading it",
-                version,
-                MINIMAL_SUPPORTED
-            );
-        }
-        if version < DESIRED {
-            warn!(
-                "Your version of clang-format ({}) is less than desired ({}). Going to use convervative config. Consider upgrading clang-format",
-                version, DESIRED
-            );
-            use_old = true;
-        }
-
         let fmt_runner = self.repo_config.get_tool_path("clang-fmt-runner")?;
 
-        let mut cmd = process::Command::new("python3");
-        cmd.arg(fmt_runner);
-
-        if use_old {
-            let old_config_path = self.repo_root.join(".clang-format-11");
-            let f = fs::File::open(&old_config_path)
-                .with_context(|| format!("failed to open {}", old_config_path.display()))?;
-            let f = io::BufReader::new(f);
-            let cfg: Json = serde_yml::from_reader(f)
-                .with_context(|| format!("failed to parse {}", old_config_path.display()))?;
-            let cfg = serde_json::to_string(&cfg)?;
-
-            cmd.arg("--style").arg(cfg);
-        } else {
-            cmd.arg(format!(
-                "--style=file:{}/.clang-format",
-                self.repo_root.display()
-            ));
-        }
-
-        cmd.args(solution_files);
-
-        cmd.status()?.exit_ok()?;
-
-        Ok(())
+        ClangFmtRunner::new(Rc::clone(&self.repo_root), fmt_runner)?.check(solution_files.iter())
     }
 }
 

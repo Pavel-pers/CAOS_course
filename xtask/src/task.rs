@@ -84,10 +84,16 @@ impl ForbiddenPatterns {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct ReportScore {
+    pub task: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub(crate) enum TestStep {
     ForbiddenPatterns(ForbiddenPatterns),
     RunCmd(RunCmd),
+    ReportScore(ReportScore),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
