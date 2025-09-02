@@ -11,5 +11,7 @@ tests:
       - <deque>
       - <vector>
     hint: "Implement linked list"
+  - type: report-score
+    task: list
 editable:
   - list.hpp

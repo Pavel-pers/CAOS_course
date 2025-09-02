@@ -9,7 +9,7 @@ fi
 public_dir=$1
 shift
 
-cargo xtask compose \
+cargo --locked xtask compose \
     --in-path . \
     --out-path $public_dir \
     --skip .git \

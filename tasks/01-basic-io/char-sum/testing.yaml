@@ -15,5 +15,7 @@ tests:
           - scanf
           - printf
         hint: "Use bare read/write"
+  - type: report-score
+    task: char-sum
 editable:
   - solution.cpp
