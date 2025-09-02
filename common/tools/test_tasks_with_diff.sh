@@ -13,5 +13,5 @@ for task in $(./common/tools/list_all_tasks.sh); do
         continue
     fi
     echo "Found changes in $task"
-    (cd $task && cargo xtask test)
+    (cd $task && cargo xtask test --report_score)
 done

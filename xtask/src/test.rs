@@ -32,6 +32,10 @@ pub struct TestArgs {
     /// Only build necessary binaries without running any tests
     #[arg(long)]
     build_only: bool,
+
+    /// Submit score to the system
+    #[arg(long)]
+    report_score: bool,
 }
 
 impl BuildProfile {
@@ -142,8 +146,12 @@ impl TestContext {
 
         let task_context = TaskContext::new(&task_abs_path, Rc::clone(&repo_root))?;
 
-        let manytask_client = if let Some(ref token) = repo_config.tester_token {
-            Some(ManytaskClient::new(repo_config.manytask_url, token)?)
+        let manytask_client = if args.report_score {
+            let tester_token = repo_config
+                .tester_token
+                .as_ref()
+                .context("TESTER_TOKEN should be set to report score")?;
+            Some(ManytaskClient::new(repo_config.manytask_url, tester_token)?)
         } else {
             None
         };
@@ -318,7 +326,10 @@ impl TestContext {
         let client = if let Some(ref client) = self.manytask_client {
             client
         } else {
-            info!("Not in CI. Score wouldn't be reported");
+            info!(
+                "Task {} is solved, submit it to gitlab to get points",
+                cfg.task
+            );
             return Ok(());
         };
 

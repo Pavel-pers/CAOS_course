@@ -26,18 +26,28 @@ stages:
     DOCKER_TLS_CERTDIR: ""
     DOCKER_DRIVER: overlay2
 
+.test-base:
+  extends: .base
+  rules:
+    - if: '$CI_COMMIT_TITLE =~ /^pub-ci-skip: /'
+      when: never
+    - when: on_success
+
 build-ci-container:
   extends: .dind-base
   stage: prepare
-  only:
-    changes:
-      - .private-ci/**
+  rules:
+    - if: '$CI_COMMIT_TITLE =~ /^pub-ci-skip: /'
+      when: never
+    - changes:
+        - .private-ci/**
+      when: on_success
   script:
     - docker build .private-ci -t domwst/caos-private-ci
     - docker push domwst/caos-private-ci
 
 test-solutions-clang:
-  extends: .base
+  extends: .test-base
   stage: test
   script:
     - CXX=$(which clang++-19) CC=$(which clang-19) ./common/tools/test_all_tasks.sh
@@ -48,7 +58,7 @@ test-solutions-clang:
 
 
 test-solutions-gcc:
-  extends: .base
+  extends: .test-base
   stage: test
   script:
     - CXX=$(which g++) CC=$(which gcc) ./common/tools/test_all_tasks.sh
@@ -59,7 +69,7 @@ test-solutions-gcc:
 
 
 check-rust-infra:
-  extends: .base
+  extends: .test-base
   stage: test
   script:
     - cargo fmt --check
@@ -72,7 +82,7 @@ check-rust-infra:
 
 test-public-repo-build:
   stage: test
-  extends: [.base, .clone-repo]
+  extends: [.test-base, .clone-repo]
   script:
     - git clone https://gitlab.com/oleg-shatov/hse-caos-public.git public-repo
     - ./common/tools/export_to.sh public-repo --skip public-repo
@@ -92,10 +102,11 @@ test-public-repo-build:
 push-public:
   extends: [.publish-base, .clone-repo]
   rules:
-    - if: '$CI_COMMIT_TITLE =~ /^pub: /'
+    - if: '$CI_COMMIT_TITLE =~ /^pub(-ci-skip)?: /'
       when: on_success
     - if: '$CI_COMMIT_TITLE =~ /^pub-manual: /'
       when: manual
+      allow_failure: false
     - when: never
   script:
     - git config --global user.name "Oleg Shatov"
@@ -105,7 +116,7 @@ push-public:
     - |
       (cd public-repo &&
       git add . &&
-      git commit --allow-empty -m "$(sed -E 's/^pub(-manual)?: //' <<< "$CI_COMMIT_TITLE")" &&
+      git commit --allow-empty -m "$(sed -E 's/^pub(-manual|-ci-skip)?: //' <<< "$CI_COMMIT_TITLE")" &&
       git push https://caos:${PUSH_TO_PUBLIC_TOKEN}@gitlab.com/oleg-shatov/hse-caos-public.git HEAD:main)
     - >
       curl --fail --silent -X POST -H "Authorization: Bearer $MT_TESTER_TOKEN"
@@ -120,11 +131,12 @@ build-container:
     - .publish-base
     - .dind-base
   rules:
-    - if: '$CI_COMMIT_TITLE =~ /^pub(-manual)?: /'
+    - if: '$CI_COMMIT_TITLE =~ /^pub(-manual|-ci-skip)?: /'
       when: on_success
     - when: never
   needs: ["push-public"]
   script:
     - docker build . -t domwst/caos-runner
     - docker push domwst/caos-runner
-
+    - docker image prune -f --filter "until=24h"
+    - docker system prune -f
