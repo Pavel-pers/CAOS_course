@@ -220,10 +220,10 @@ impl TestContext {
     }
 
     fn run(self) -> Result<()> {
+        self.check_format()?;
         for step in &self.task_context.test_config.tests {
             self.run_step(step)?;
         }
-        self.check_format()?;
         Ok(())
     }
 
