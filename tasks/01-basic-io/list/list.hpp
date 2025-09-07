@@ -27,10 +27,6 @@ class List {
         Clear();
     }
 
-    void Clear() {
-        // TODO: your code here.
-    }
-
     void PushBack(int value) {
         UNUSED(value);  // TODO: remove before flight.
     }
@@ -64,6 +60,10 @@ class List {
 
     void Swap(List& other) {
         UNUSED(other);  // TODO: remove before flight.
+    }
+
+    void Clear() {
+        // TODO: your code here.
     }
 
     // https://en.cppreference.com/w/cpp/container/list/splice

@@ -3,6 +3,7 @@
 #![feature(try_blocks)]
 #![feature(impl_trait_in_bindings)]
 
+mod command;
 mod compose;
 pub mod dispatch;
 mod r#move;

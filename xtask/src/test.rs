@@ -9,6 +9,7 @@ use std::{
 };
 
 use crate::{
+    command::{CommandBuilder, CommandLimits, CommandRunner, NSJailRunner, NativeCommandRunner},
     task::ReportScore,
     util::{ManytaskClient, PathExt},
 };
@@ -21,6 +22,7 @@ use crate::{
 use annotate_snippets::{Annotation, AnnotationKind, Group, Level, Renderer, Snippet, renderer};
 use anyhow::{Context, Result, bail};
 use clap::Parser;
+use derivative::Derivative;
 use gix::{self, Repository};
 use itertools::Itertools;
 use regex::Regex;
@@ -36,6 +38,10 @@ pub struct TestArgs {
     /// Submit score to the system
     #[arg(long)]
     report_score: bool,
+
+    /// Run solution in a jail
+    #[arg(long)]
+    jail: bool,
 }
 
 impl BuildProfile {
@@ -93,6 +99,7 @@ struct RepoConfig {
     manytask_url: &'static str,
     tester_token: Option<String>,
     manytask_course_name: &'static str,
+    default_limits: CommandLimits,
 }
 
 impl RepoConfig {
@@ -106,6 +113,12 @@ impl RepoConfig {
             manytask_url: "https://manytask.kek.today",
             tester_token: std::env::var("TESTER_TOKEN").ok(),
             manytask_course_name: "hse-caos-2025",
+            default_limits: CommandLimits {
+                procs: Some(10),
+                memory: Some(256 << 20),
+                wall_time_sec: Some(10),
+                cpu_ms_per_sec: Some(3000),
+            },
         }
     }
 
@@ -121,7 +134,8 @@ impl RepoConfig {
     }
 }
 
-#[derive(Debug)]
+#[derive(Derivative)]
+#[derivative(Debug)]
 struct TestContext {
     #[allow(dead_code)]
     repo: Repository,
@@ -130,6 +144,9 @@ struct TestContext {
     task_context: TaskContext,
     args: TestArgs,
     manytask_client: Option<ManytaskClient>,
+
+    #[derivative(Debug = "ignore")]
+    cmd_runner: Box<dyn CommandRunner>,
 }
 
 impl TestContext {
@@ -156,6 +173,13 @@ impl TestContext {
             None
         };
 
+        let use_jail = args.jail || args.report_score;
+        let runner: Box<dyn CommandRunner> = if use_jail {
+            Box::new(NSJailRunner::new()?)
+        } else {
+            Box::new(NativeCommandRunner)
+        };
+
         Ok(TestContext {
             repo,
             repo_config,
@@ -163,6 +187,7 @@ impl TestContext {
             task_context,
             args,
             manytask_client,
+            cmd_runner: runner,
         })
     }
 
@@ -307,10 +332,14 @@ impl TestContext {
 
         let bin = args.first().context("no cmd was given")?;
 
-        process::Command::new(bin)
+        let cmd = CommandBuilder::new(bin)
             .args(&args[1..])
-            .status()?
-            .exit_ok()?;
+            // TODO: Move to config
+            .inherit_envs(["PATH", "USER", "HOME", "TERM"])
+            .with_limits(self.repo_config.default_limits)
+            .with_rw_mount(&*self.repo_root);
+
+        self.cmd_runner.status(&cmd)?.exit_ok()?;
 
         Ok(())
     }
@@ -333,7 +362,7 @@ impl TestContext {
             return Ok(());
         };
 
-        let user = if let Ok(username) = std::env::var("CI_PROJECT_NAME") {
+        let user = if let Ok(username) = std::env::var("GITLAB_USER_LOGIN") {
             username
         } else {
             info!("No username so score wouldn't be reported");
@@ -479,6 +508,10 @@ impl TestContext {
     }
 
     fn check_format(&self) -> Result<()> {
+        if self.args.build_only {
+            info!("Running in build-only mode. Formatting woulnd't be checked");
+            return Ok(());
+        }
         let solution_files = self.task_context.find_editable_files()?;
         if solution_files.is_empty() {
             warn!("No solution files were found. Skipping formatting step");

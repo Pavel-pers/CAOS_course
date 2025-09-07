@@ -1,0 +1,21 @@
+tests:
+  - type: run-cmd
+    cmd: [tool:nej-runner, --checker, cmp, --run-cmd, build:solution_fib_root]
+    profiles:
+      - asan
+      - release
+  - type: forbidden-patterns
+    groups:
+      - substring:
+          - <iostream>
+          - <stdio.h>
+          - std::cin
+          - std::cout
+          - getchar
+          - scanf
+          - printf
+        hint: "Use bare read/write"
+  - type: report-score
+    task: fib-root
+editable:
+  - solution.cpp

@@ -1,0 +1,10 @@
+tests:
+  - type: run-cmd
+    cmd: [build:test_list]
+    profiles:
+      - debug
+      - asan
+  - type: report-score
+    task: reverse-list
+editable:
+  - reverse-list.cpp

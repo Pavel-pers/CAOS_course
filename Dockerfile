@@ -1,13 +1,9 @@
-FROM rustlang/rust:nightly-slim
+FROM domwst/caos-private-ci
 
 WORKDIR /public
 
-RUN apt-get update && apt-get install -y \
-    cmake git clang-19 clang-format && \
-    apt-get clean
-
-RUN update-alternatives --install /usr/bin/cc cc $(which clang-19) 30
-RUN update-alternatives --install /usr/bin/c++ c++ $(which clang++-19) 30
+RUN update-alternatives --install /usr/bin/cc cc $(which gcc) 30
+RUN update-alternatives --install /usr/bin/c++ c++ $(which g++) 30
 
 ADD --keep-git-dir https://gitlab.com/oleg-shatov/hse-caos-public.git .
 

@@ -39,12 +39,9 @@ stages:
 build-ci-container:
   extends: .dind-base
   stage: prepare
-  rules:
-    - if: '$CI_COMMIT_TITLE =~ /^pub-ci-skip: /'
-      when: never
-    - changes:
-        - .private-ci/**
-      when: on_success
+  only:
+    changes:
+      - .private-ci/**
   script:
     - docker build .private-ci -t domwst/caos-private-ci
     - docker push domwst/caos-private-ci

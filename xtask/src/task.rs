@@ -28,8 +28,8 @@ fn default_build_profiles() -> Vec<BuildProfile> {
     Vec::from_iter([BuildProfile::Release])
 }
 
-const fn default_false() -> bool {
-    false
+const fn default_true() -> bool {
+    true
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -39,7 +39,7 @@ pub(crate) struct RunCmd {
 
     pub(crate) cmd: Vec<String>,
 
-    #[serde(default = "default_false")]
+    #[serde(default = "default_true")]
     pub(crate) echo: bool,
 }
 
