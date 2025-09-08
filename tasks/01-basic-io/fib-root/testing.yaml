@@ -12,6 +12,7 @@ tests:
           - std::cin
           - std::cout
           - getchar
+      - token:
           - scanf
           - printf
         hint: "Use bare read/write"
