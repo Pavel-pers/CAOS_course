@@ -110,6 +110,11 @@ impl CommandBuilder {
         self
     }
 
+    pub fn with_cwd(mut self, cwd: impl Into<PathBuf>) -> Self {
+        self.cwd = Some(cwd.into());
+        self
+    }
+
     pub fn arg(self, arg: impl Into<OsString>) -> Self {
         self.args([arg])
     }
@@ -126,12 +131,12 @@ impl CommandBuilder {
     }
 
     pub fn with_rw_mount(mut self, p: impl Into<PathBuf>) -> Self {
-        self.mounts_ro.push(p.into());
+        self.mounts_rw.push(p.into());
         self
     }
 
     pub fn with_ro_mount(mut self, p: impl Into<PathBuf>) -> Self {
-        self.mounts_rw.push(p.into());
+        self.mounts_ro.push(p.into());
         self
     }
 }
@@ -191,6 +196,10 @@ impl CommandRunner for NSJailRunner {
 
         for p in &cmd.mounts_rw {
             c.arg("-B").arg(p);
+        }
+
+        if let Some(ref cwd) = cmd.cwd {
+            c.arg("--cwd").arg(cwd);
         }
 
         let limits = cmd.limits;

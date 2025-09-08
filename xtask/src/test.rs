@@ -337,7 +337,8 @@ impl TestContext {
             // TODO: Move to config
             .inherit_envs(["PATH", "USER", "HOME", "TERM"])
             .with_limits(self.repo_config.default_limits)
-            .with_rw_mount(&*self.repo_root);
+            .with_rw_mount(&*self.repo_root)
+            .with_cwd(self.task_context.full_path());
 
         self.cmd_runner.status(&cmd)?.exit_ok()?;
 

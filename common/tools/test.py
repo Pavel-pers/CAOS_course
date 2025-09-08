@@ -435,7 +435,9 @@ else:
 
 for cnt in range(args.retests_count):
     print(f"Trying tests #{cnt}")
+    tests_cnt = 0
     for test in sorted(Path('tests').glob('*.dat')):
+        tests_cnt += 1
         inf = Path(str(test).removesuffix('.dat') + '.inf')
         ans = Path(str(test).removesuffix('.dat') + '.ans')
         dirent = Path(str(test).removesuffix('.dat') + '.dir')
@@ -472,5 +474,8 @@ for cnt in range(args.retests_count):
         if args.prepare_answers:
             with open(ans, 'wb') as fout:
                 fout.write(res)
+
+    if tests_cnt == 0:
+        raise RuntimeError("No tests were found")
 
 print("All tests passed")
