@@ -68,3 +68,7 @@ Usage: cargo [+toolchain] [OPTIONS] [COMMAND]
 ```bash
 rustup default nightly
 ```
+
+## Следующие шаги
+
+После настройки окружения можете переходить к [настройке репозитория](./repo-setup.md).
