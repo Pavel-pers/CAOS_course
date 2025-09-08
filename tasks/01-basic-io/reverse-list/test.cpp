@@ -14,6 +14,8 @@ void CheckReverseOn(std::span<ListNode> nodes) {
         nodes[i].value = static_cast<int>(i);
         if (i + 1 < nodes.size()) {
             nodes[i].next = &nodes[i + 1];
+        } else {
+            nodes[i].next = nullptr;
         }
     }
 
@@ -57,13 +59,24 @@ TEST_CASE("Works") {
         CHECK(reversed == tail);
         CHECK(reversed->next == node);
 
-        FreeList(node);
+        FreeList(reversed);
     }
 
-    CheckReverse<2>();
-    CheckReverse<3>();
-    CheckReverse<4>();
-    CheckReverse<5>();
+    SECTION("Reverse-2") {
+        CheckReverse<2>();
+    }
+
+    SECTION("Reverse-3") {
+        CheckReverse<3>();
+    }
+
+    SECTION("Reverse-4") {
+        CheckReverse<4>();
+    }
+
+    SECTION("Reverse-5") {
+        CheckReverse<5>();
+    }
 }
 
 TEST_CASE("BigList") {

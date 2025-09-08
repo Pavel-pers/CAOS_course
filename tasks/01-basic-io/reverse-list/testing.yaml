@@ -1,6 +1,6 @@
 tests:
   - type: run-cmd
-    cmd: [build:test_list]
+    cmd: [build:test_reverse_list]
     profiles:
       - debug
       - asan
