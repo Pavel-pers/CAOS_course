@@ -1,6 +1,6 @@
 tests:
   - type: run-cmd
-    cmd: [tool:nej-runner, --checker, cmp, --run-cmd, build:solution_fib_root]
+    cmd: [python3, tool:nej-runner, --checker, cmp, --run-cmd, build:solution_fib_root]
     profiles:
       - asan
       - release

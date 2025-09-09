@@ -1,6 +1,6 @@
 tests:
   - type: run-cmd
-    cmd: [tool:nej-runner, --checker, cmp, --run-cmd, build:solution_char_sum]
+    cmd: [python3, tool:nej-runner, --checker, cmp, --run-cmd, build:solution_char_sum]
     profiles:
       - asan
       - release
