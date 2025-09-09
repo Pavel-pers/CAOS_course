@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
     rc::Rc,
 };
-use tracing::{debug, trace};
+use tracing::{debug, trace, warn};
 use walkdir::WalkDir;
 
 use clap::Parser;
@@ -57,10 +57,17 @@ impl MoveContext {
             }
 
             let ctx_to = TaskContext::new(entry.path(), Rc::clone(&self.to.repo_root))?;
-            let ctx_from = TaskContext::new(
-                &self.from.repo_root.join(&ctx_to.task_path),
-                Rc::clone(&self.from.repo_root),
-            )?;
+
+            let from_path = self.from.repo_root.join(&ctx_to.task_path);
+            if !TaskContext::is_task(&from_path)? {
+                warn!(
+                    "Path {} is not a task, likely your repository is outdated",
+                    from_path.display()
+                );
+                continue;
+            }
+
+            let ctx_from = TaskContext::new(&from_path, Rc::clone(&self.from.repo_root))?;
 
             debug!("Found task {}", ctx_to.task_path.display());
 
