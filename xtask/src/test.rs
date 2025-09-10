@@ -27,7 +27,7 @@ use gix::{self, Repository};
 use itertools::Itertools;
 use regex::Regex;
 use strum::IntoEnumIterator;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 #[derive(Debug, Parser)]
 pub struct TestArgs {
@@ -198,14 +198,15 @@ impl TestContext {
         fresh: bool,
     ) -> io::Result<process::ExitStatus> {
         let mut cmd = process::Command::new("cmake");
-        cmd.arg("-B")
-            .arg(build_dir)
-            .arg("-S")
-            .arg(self.repo_root.as_ref())
-            .arg(format!("-DCMAKE_BUILD_TYPE={}", profile.cmake_build_type()));
         if fresh {
             cmd.arg("--fresh");
         }
+        cmd.arg(format!("-DCMAKE_BUILD_TYPE={}", profile.cmake_build_type()))
+            .arg("-B")
+            .arg(build_dir)
+            .arg("-S")
+            .arg(self.repo_root.as_ref());
+        debug!("Running cmake: {cmd:?}");
         cmd.status()
     }
 
@@ -219,14 +220,16 @@ impl TestContext {
 
         let cpus_str = format!("{}", num_cpus::get());
         let build = || {
-            process::Command::new("cmake")
+            let mut build_cmd = process::Command::new("cmake");
+            build_cmd
                 .arg("--build")
                 .arg(&build_dir)
                 .arg("--target")
                 .arg(target)
                 .arg("-j")
-                .arg(&cpus_str)
-                .status()
+                .arg(&cpus_str);
+            debug!("Running build: {build_cmd:?}");
+            build_cmd.status()
         };
 
         let target_path = build_dir.join(target);
