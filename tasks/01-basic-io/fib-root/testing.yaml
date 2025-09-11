@@ -5,17 +5,18 @@ tests:
       - asan
       - release
   - type: forbidden-patterns
-    groups:
-      - substring:
-          - <iostream>
-          - <stdio.h>
-          - std::cin
-          - std::cout
-          - getchar
-      - token:
-          - scanf
-          - printf
-        hint: "Use bare read/write"
+    substring:
+      - getchar
+      - gets
+      - puts
+      - fprintf
+    token:
+      - <iostream>
+      - cin
+      - cout
+      - scanf
+      - printf
+    hint: "Use bare read/write"
   - type: report-score
     task: fib-root
 editable:
