@@ -2,8 +2,9 @@ tests:
   - type: run-cmd
     cmd: [build:test_reverse_list]
     profiles:
-      - debug
       - asan
+      - debug
+      - release
   - type: report-score
     task: reverse-list
 editable:

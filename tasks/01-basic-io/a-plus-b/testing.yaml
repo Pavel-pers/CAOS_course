@@ -3,6 +3,7 @@ tests:
     cmd: [build:test_a_plus_b]
     profiles:
       - debug
+      - release
   - type: report-score
     task: a-plus-b
 editable:
