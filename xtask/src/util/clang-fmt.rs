@@ -89,8 +89,10 @@ impl ClangFmtRunner {
         }
 
         cmd.args(files.into_iter().map(|f| f.as_ref()))
-            .status()?
-            .exit_ok()?;
+            .status()
+            .with_context(|| format!("running {cmd:?}"))?
+            .exit_ok()
+            .context("failed to check formatting, check the logs above for a possible fix")?;
 
         Ok(())
     }
