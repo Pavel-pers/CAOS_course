@@ -1,0 +1,14 @@
+tests:
+  - type: run-cmd
+    cmd: [python3, tool:nej-runner, --checker, cmp, --run-cmd, build:solution_broken_symlinks]
+    profiles:
+      - asan
+      - release
+  - type: forbidden-patterns
+    token:
+      - filesystem
+      - system
+  - type: report-score
+    task: broken-symlinks
+editable:
+  - solution.cpp
