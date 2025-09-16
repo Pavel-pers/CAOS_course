@@ -33,6 +33,25 @@ deadlines:
         - task: list
           score: 100
 
+    - group: 02-files
+      start: 2025-09-14 10:00
+      steps:
+        1.0: 2025-09-28 21:00
+        0.5: 2025-10-05 21:00
+      end: 2026-01-01 00:00
+      enabled: true
+      tasks:
+        - task: buf-writer
+          score: 100
+        - task: simple-traverse
+          score: 100
+        - task: broken-symlinks
+          score: 100
+        - task: binary-tree
+          score: 100
+        - task: capture-output
+          score: 100
+
 grades:
   grades:
     10: [{ percent: 95 }]

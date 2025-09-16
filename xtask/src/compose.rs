@@ -349,6 +349,28 @@ impl Compose {
         Ok(())
     }
 
+    fn process_symlink(&self, in_path: &Path, out_path: Option<&Path>) -> Result<()> {
+        let out_path = if let Some(p) = out_path {
+            p
+        } else {
+            return Ok(());
+        };
+
+        if let Ok(to_meta) = fs::symlink_metadata(out_path) {
+            if to_meta.is_dir() {
+                fs::remove_dir_all(out_path)
+            } else {
+                fs::remove_file(out_path)
+            }
+            .with_context(|| format!("removing {}", out_path.display()))?
+        }
+
+        let target = fs::read_link(in_path)?;
+        std::os::unix::fs::symlink(&target, out_path)?;
+
+        Ok(())
+    }
+
     #[allow(clippy::type_complexity)]
     fn get_export_checker(dir: &Path) -> Result<Box<dyn Fn(&Path) -> bool>> {
         let export_config = Path::new(".export.yaml");
@@ -413,8 +435,12 @@ impl Compose {
 
             if new_in_path.is_dir() {
                 self.process_dir(&new_in_path, new_out_path.as_deref())?;
-            } else {
+            } else if new_in_path.is_symlink() {
+                self.process_symlink(&new_in_path, new_out_path.as_deref())?;
+            } else if new_in_path.is_file() {
                 self.process_file(&new_in_path, new_out_path.as_deref())?;
+            } else {
+                bail!("unknown thing at {}", new_in_path.display());
             }
         }
 

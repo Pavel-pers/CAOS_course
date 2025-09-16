@@ -1,4 +1,4 @@
-#!/bin/env python3
+#!/usr/bin/env python3
 
 import signal
 import sys
@@ -19,6 +19,7 @@ import shutil
 import resource
 
 repo_root = Path(os.path.realpath(__file__)).parent.parent.parent
+problem_dir = os.getcwd()
 
 
 def get_child_pid(pid: int) -> int:
@@ -179,6 +180,12 @@ def res_checker(res: bytes, ans: Path, checker: str):
     with open(ans, 'rb') as expected:
         correct = expected.read()
 
+    replacements = {
+        b"${problem.problem_dir}": problem_dir.encode(),
+    }
+    for a, b in replacements.items():
+        correct = correct.replace(a, b)
+
     checkers = {
         'cmp': cmp_checker,
         'sorted-lines': sorted_lines_checker,
@@ -206,7 +213,7 @@ def run_solution(input_file: Path, correct_file: Path, inf_file: Path, cmd: str,
     run_path = create_run_dir(dirent, static_copy)
     params = params.replace(input_filename, relative_path(run_path, input_file))
     if meta.get('enable_subst', False):
-        params = params.replace('${problem.problem_dir}', os.getcwd())
+        params = params.replace('${problem.problem_dir}', problem_dir)
     cmd = cmd.replace(input_filename, relative_path(run_path, input_file))
 
     cmd = cmd.replace('test_name', 'tests/' + input_file.name.removesuffix('.dat'))
@@ -220,7 +227,7 @@ def run_solution(input_file: Path, correct_file: Path, inf_file: Path, cmd: str,
     if env_add:
         env = env.copy()
         if meta.get('enable_subst', False):
-            env.update((key, val.replace('${problem.problem_dir}', os.getcwd())) for key, val in env_add.items())
+            env.update((key, val.replace('${problem.problem_dir}', problem_dir)) for key, val in env_add.items())
         else:
             env.update(env_add)
     before_children_user = os.times().children_user
@@ -394,18 +401,19 @@ def parse_inf_file(f):
     flags = {'enable_subst', 'check_stderr'}
 
     for line in f.readlines():
-        if not line.strip():
+        line = line.strip()
+        if not line:
             continue
         if ' = ' in line:
             key, val = line.split(' = ', maxsplit=1)
             val = val.strip()
             parse_param(key, val)
-        elif line.endswith(' =\n'):
+        elif line.endswith(' ='):
             continue
-        elif line.strip() in flags:
-            res[line.strip()] = True
+        elif line in flags:
+            res[line] = True
         else:
-            raise RuntimeError(f"Unknown param '{line.strip()}'")
+            raise RuntimeError(f"Unknown param '{line}'")
     return res
 
 

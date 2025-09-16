@@ -1,0 +1,16 @@
+tests:
+  - type: run-cmd
+    cmd: [python3, tool:nej-runner, --checker, ignore-spaces, --run-cmd, build:solution_binary_tree]
+    profiles:
+      - asan
+      - release
+  - type: forbidden-patterns
+    token:
+      - fstream
+      - fread
+      - fseek
+      - cin
+  - type: report-score
+    task: binary-tree
+editable:
+  - solution.cpp

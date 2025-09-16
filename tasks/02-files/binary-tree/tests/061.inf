@@ -1,0 +1,4 @@
+params = input.txt
+environ = READ_DELAY_NS=340000
+real_time_limit_ms = 1000
+comment = "check that read() is called at most $n_nodes times"

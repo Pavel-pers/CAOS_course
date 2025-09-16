@@ -5,7 +5,7 @@ use std::{
     rc::Rc,
 };
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use globset::{Glob, GlobSetBuilder};
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
@@ -187,6 +187,11 @@ impl TaskContext {
                 }
                 editable.insert(item.path().to_path_buf());
             }
+
+            if editable.is_empty() {
+                bail!("no editable files found");
+            }
+
             editable
         };
 

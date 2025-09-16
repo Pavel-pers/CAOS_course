@@ -1,0 +1,3 @@
+params = input.txt
+environ = MIN_READ_CALLS=2
+comment = "check that file is read by chunks"
