@@ -2,6 +2,8 @@
 
 #include "wrappers.hpp"
 
+#include <distributions.hpp>
+
 #include <catch2/catch_get_random_seed.hpp>
 #include <catch2/catch_test_macros.hpp>
 
@@ -124,7 +126,7 @@ TEST_CASE("IncompleteWrites") {
     {
         BufWriter w(fds[1], 5);
 
-        std::uniform_int_distribution<char> distr('a', 'z');
+        UniformCharDistribution distr('a', 'z');
         for (size_t i = 0; i < 97; ++i) {
             char c = distr(rng);
             w.Write(std::string_view{&c, 1});
@@ -154,7 +156,7 @@ TEST_CASE("BigWrites") {
 
     std::string data;
     {
-        std::uniform_int_distribution<char> distr('a', 'z');
+        UniformCharDistribution distr('a', 'z');
         BufWriter w(fds[1], 5);
         for (size_t i = 0; i < 250; ++i) {
             size_t l = rng() & 15;

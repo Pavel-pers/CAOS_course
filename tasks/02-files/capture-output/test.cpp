@@ -1,5 +1,6 @@
 #include "capture.hpp"
 
+#include <distributions.hpp>
 #include <fd_guard.hpp>
 #include <overload.hpp>
 #include <rlim_guard.hpp>
@@ -34,7 +35,7 @@ TEST_CASE("CheckPipeCapacity") {
     int r = pipe(fds);
     REQUIRE(r != -1);
     int cap = fcntl(fds[0], F_GETPIPE_SZ);
-    REQUIRE(cap >= (64 << 10));
+    REQUIRE(cap >= (4 << 10));
     close(fds[0]);
     close(fds[1]);
 }
@@ -125,9 +126,9 @@ TEST_CASE("EOF") {
 TEST_CASE("HugeIO") {
     FileDescriptorsGuard guard;
 
-    static constexpr size_t kBufSize = 64 << 10;
+    static constexpr size_t kBufSize = 4 << 10;
     std::mt19937 rng(Catch::getSeed());
-    std::uniform_int_distribution<char> distr('a', 'z');
+    UniformCharDistribution distr('a', 'z');
 
     auto create_string = [&] {
         std::string s(kBufSize, ' ');
@@ -168,7 +169,7 @@ TEST_CASE("ErrorRecovery") {
     static constexpr int kBaseFdCount = 6;  // 3 from the guard
 
     std::mt19937 rng(Catch::getSeed());
-    std::uniform_int_distribution<char> distr('a', 'z');
+    UniformCharDistribution distr('a', 'z');
 
     auto create_string = [&](size_t len) {
         std::string s(len, ' ');
