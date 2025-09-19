@@ -121,9 +121,24 @@ class List {
     // l1.Splice({4, 5, 6});
     // l1 == {1, 2, 3, 4, 5, 6};
     void Splice(List& other) {
-        while (!other.IsEmpty()) {
-            PushBack(other.Front());
-            other.PopFront();
+        if (other.size == 0) {
+            return;
+        }
+        if (size == 0) {
+            front = other.front;
+            back = other.back;
+            size = other.size;
+            other.front = nullptr;
+            other.back = nullptr;
+            other.size = 0;
+        } else {
+            back->next = other.front;
+            other.front->prev = back;
+            back = other.back;
+            size += other.size;
+            other.back = nullptr;
+            other.front = nullptr;
+            other.size = 0;
         }
     }
 
