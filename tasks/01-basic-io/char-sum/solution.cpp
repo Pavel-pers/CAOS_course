@@ -42,7 +42,13 @@ bool write_int(const int fd, uint64_t num) {
             return false;
         }
     }
-    return true;
+    char newline = '\n';
+    ssize_t pkg_size = write(fd, &newline, 1);
+    if (pkg_size == -1 || pkg_size == 0) {
+        return false;
+    } else {
+        return true;
+    }
 }
 
 int main() {
