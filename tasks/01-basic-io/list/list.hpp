@@ -2,7 +2,11 @@
 
 #include <utility>
 
-#include <unused.hpp>  // TODO: remove before flight.
+struct ListNode {
+    int value;
+    ListNode* prev;
+    ListNode* next;
+};
 
 class List {
   public:
@@ -21,6 +25,9 @@ class List {
     }
 
     List() {
+        front = nullptr;
+        back = nullptr;
+        size = 0;
     }
 
     ~List() {
@@ -28,58 +35,106 @@ class List {
     }
 
     void PushBack(int value) {
-        UNUSED(value);  // TODO: remove before flight.
+        if (size == 0) {
+            auto new_node = new ListNode(value, nullptr, nullptr);
+            front = new_node;
+            back = new_node;
+        } else {
+            auto* new_node = new ListNode(value, back, nullptr);
+            back->next = new_node;
+            back = new_node;
+        }
+        size++;
     }
 
     void PushFront(int value) {
-        UNUSED(value);  // TODO: remove before flight.
+        if (size == 0) {
+            auto new_node = new ListNode(value, nullptr, nullptr);
+            front = new_node;
+            back = new_node;
+        } else {
+            auto* new_node = new ListNode(value, nullptr, front);
+            front->prev = new_node;
+            front = new_node;
+        }
+        size++;
     }
 
     void PopBack() {
-        // TODO: your code here.
+        auto* new_back = back->prev;
+        if (new_back != nullptr) {
+            new_back->next = nullptr;
+        }
+        delete back;
+        back = new_back;
+        size--;
+
+        if (size == 0) {
+            front = nullptr;
+        }
     }
 
     void PopFront() {
-        // TODO: your code here.
+        auto* new_front = front->next;
+        if (new_front != nullptr) {
+            new_front->prev = nullptr;
+        }
+        delete front;
+        front = new_front;
+        size--;
+
+        if (size == 0) {
+            back = nullptr;
+        }
     }
 
     int& Back() {
-        // TODO: your code here.
-        throw "TODO";
+        return back->value;
     }
 
     int& Front() {
-        // TODO: your code here.
-        throw "TODO";
+        return front->value;
     }
 
-    bool IsEmpty() const {
-        // TODO: your code here.
-        throw "TODO";
+    bool IsEmpty() {
+        return size == 0;
     }
 
     void Swap(List& other) {
-        UNUSED(other);  // TODO: remove before flight.
+        std::swap(front, other.front);
+        std::swap(back, other.back);
+        std::swap(size, other.size);
     }
 
     void Clear() {
-        // TODO: your code here.
+        while (size > 0) {
+            PopFront();
+        }
     }
 
     // https://en.cppreference.com/w/cpp/container/list/splice
     // Expected behavior:
-    // l1 = {1, 2, 3};
+    // l1l = {1, 2, 3};
     // l1.Splice({4, 5, 6});
     // l1 == {1, 2, 3, 4, 5, 6};
     void Splice(List& other) {
-        UNUSED(other);  // TODO: remove before flight.
+        while (!other.IsEmpty()) {
+            PushBack(other.Front());
+            other.PopFront();
+        }
     }
 
     template <class F>
     void ForEachElement(F&& f) const {
-        UNUSED(f);  // TODO: remove before flight.
+        ListNode* cur = front;
+        while (cur != nullptr) {
+            f(cur->value);
+            cur = cur->next;
+        }
     }
 
   private:
-    // TODO: your code here.
+    ListNode* front;
+    ListNode* back;
+    size_t size;
 };
