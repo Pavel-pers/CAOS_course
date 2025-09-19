@@ -35,6 +35,10 @@ bool write_int(const int fd, uint64_t num) {
         num /= 10;
         digit_count++;
     }
+    if (digit_count == 0) {
+        num_str[0] = '0';
+        digit_count++;
+    }
 
     for (size_t i = 0; i < digit_count; i++) {
         ssize_t pkg_size = write(fd, &num_str[digit_count - i - 1], 1);
