@@ -6,7 +6,6 @@
 #include <string>
 #include <unistd.h>
 
-
 ssize_t sum_bytes(const int fd) {
     static constexpr int buck_size = 8;
 
