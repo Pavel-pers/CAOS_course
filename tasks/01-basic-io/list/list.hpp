@@ -1,9 +1,9 @@
 #pragma once
 
-#include <utility>
 #include <cstdint>  // size_t
 #include <cstdio>
 #include <cstdlib>
+#include <utility>
 
 struct ListNode {
     int value;
