@@ -64,7 +64,7 @@ deadlines:
           score: 100
         - task: c-strings
           score: 100
-        - task: binary-tree
+        - task: binary-tree-2
           score: 100
         - task: spiral
           score: 100
