@@ -1,0 +1,13 @@
+tests:
+  - type: run-cmd
+    cmd: [build:test_simple_alloc] 
+    profiles:
+      - release
+  - type: forbidden-patterns
+    token:
+      - Exit
+    hint: Nope
+  - type: report-score
+    task: simple-allocator
+editable:
+  - simple-allocator.cpp

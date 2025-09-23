@@ -52,6 +52,26 @@ deadlines:
         - task: capture-output
           score: 100
 
+    - group: 03-mmap
+      start: 2025-09-23 19:00
+      steps:
+        1.0: 2025-10-05 21:00
+        0.5: 2025-10-12 21:00
+      end: 2026-01-01 00:00
+      enabled: true
+      tasks:
+        - task: average
+          score: 100
+        - task: c-strings
+          score: 100
+        - task: binary-tree
+          score: 100
+        - task: spiral
+          score: 100
+        - task: simple-allocator
+          score: 100
+
+
 grades:
   grades:
     10: [{ percent: 95 }]
