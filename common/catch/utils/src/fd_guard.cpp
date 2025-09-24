@@ -31,23 +31,13 @@ static std::vector<int> GetOpenFileDescriptors() {
     return fds;
 }
 
-static bool TestSameFd(int fd1, int fd2) {
-    int pid = getpid();
-    int ret = syscall(SYS_kcmp, pid, pid, KCMP_FILE, fd1, fd2);
-    if (ret == -1) {
-        int err = errno;
-        INTERNAL_ASSERT(err != EBADF);
-        return false;
-    }
-    return ret == 0;
-}
-
 static size_t MaxFdNum() {
     struct rlimit limits{};
 
     int r = ::getrlimit(RLIMIT_NOFILE, &limits);
     INTERNAL_ASSERT(r != -1);
-    return limits.rlim_cur;
+    // Probably should check `/proc/sys/fs/nr_open` instead
+    return std::min(static_cast<size_t>(limits.rlim_cur), size_t{2048});
 }
 
 FileDescriptorsGuard::FileDescriptorsGuard() {
@@ -68,7 +58,7 @@ FileDescriptorsGuard::FileDescriptorsGuard() {
     }
 }
 
-bool FileDescriptorsGuard::TestDescriptorsState() const {
+bool FileDescriptorsGuard::TestDescriptorsState() {
     for (auto [from, to] : copies) {
         if (!TestSameFd(from, to)) {
             WARN("Descriptors " << from << " and " << to
@@ -78,13 +68,39 @@ bool FileDescriptorsGuard::TestDescriptorsState() const {
     }
 
     auto fds = GetOpenFileDescriptors();
-    auto expected = copies.size() * 2;
+    auto expected = OpenFdsCount();
     if (fds.size() != expected) {
         WARN("Descriptors count mismatch. Expected "
              << expected << ", actually " << fds.size());
         return false;
     }
     return true;
+}
+
+size_t FileDescriptorsGuard::OpenFdsCount() const {
+    return copies.size() * 2;
+}
+
+bool FileDescriptorsGuard::TestSameFd(int fd1, int fd2) {
+    int pid = getpid();
+    int ret = syscall(SYS_kcmp, pid, pid, KCMP_FILE, fd1, fd2);
+    if (ret == -1) {
+        int err = errno;
+        if (err == ENOSYS) {
+            if (ShouldWarnKCmp()) {
+                WARN("KCmp is not available on your system, some checks "
+                     "wouldn't be performed");
+            }
+            return true;
+        }
+        INTERNAL_ASSERT(err == EBADF);
+        return false;
+    }
+    return ret == 0;
+}
+
+bool FileDescriptorsGuard::ShouldWarnKCmp() {
+    return !std::exchange(warned_kcmp_, true);
 }
 
 FileDescriptorsGuard::~FileDescriptorsGuard() {
