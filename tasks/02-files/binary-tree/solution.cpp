@@ -12,23 +12,40 @@ struct Node {
 constexpr size_t NodeSize = sizeof(Node);
 
 Node read_node(int fd, const size_t idx) {
+    off_t current_pos = lseek(fd, 0, SEEK_CUR);
+    if (current_pos == -1) {
+        std::cerr << "Error: unable to get Node: " << errno << std::endl;
+        exit(1);
+    }
+
+    off_t target_pos = static_cast<off_t>(idx) * static_cast<off_t>(NodeSize);
+    if (lseek(fd, target_pos, SEEK_SET) == -1) {
+        std::cerr << "Error: unable to seek to position " << target_pos
+                  << "errno: " << errno << std::endl;
+        exit(1);
+    }
+
     char buf[sizeof(Node)];
     size_t summary_bytes = 0;
     while (summary_bytes < NodeSize) {
         ssize_t bytes_read =
-            pread(fd, buf, NodeSize - summary_bytes,
-                  static_cast<off_t>(idx * NodeSize + summary_bytes));
+            read(fd, buf + summary_bytes, NodeSize - summary_bytes);
         if (bytes_read == -1) {
             std::cerr << "Unable to read Node at index: " << idx
-                      << " erno:" << errno << std::endl;
+                      << " errno:" << errno << std::endl;
             exit(1);
         }
         if (bytes_read == 0) {
             std::cerr << "Unable to read Node at index: " << idx
-                      << " file clodsed" << std::endl;
+                      << " file closed" << std::endl;
             exit(1);
         }
         summary_bytes += bytes_read;
+    }
+
+    if (lseek(fd, current_pos, SEEK_SET) == -1) {
+        std::cerr << "Error: unable to restore file position" << std::endl;
+        exit(1);
     }
 
     Node node;
