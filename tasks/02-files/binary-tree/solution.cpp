@@ -20,12 +20,12 @@ Node read_node(int fd, const size_t idx) {
                   static_cast<off_t>(idx * NodeSize + summary_bytes));
         if (bytes_read == -1) {
             std::cerr << "Unable to read Node at index: " << idx << " erno:"
-                << errno << std::endl;
+                      << errno << std::endl;
             exit(1);
         }
         if (bytes_read == 0) {
             std::cerr << "Unable to read Node at index: " << idx
-                << " file clodsed" << std::endl;
+                      << " file clodsed" << std::endl;
             exit(1);
         }
         summary_bytes += bytes_read;
