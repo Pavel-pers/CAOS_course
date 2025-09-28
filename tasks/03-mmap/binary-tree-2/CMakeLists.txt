@@ -1,0 +1,1 @@
+add_caos_executable(solution_binary_tree_2 solution.cpp)

@@ -1,0 +1,12 @@
+tests:
+  - type: run-cmd
+    cmd: [python3, tool:nej-runner, --run-cmd, build:solution_average, --checker, cmp-double]
+    profiles:
+      - asan
+      - release
+    extra_env:
+      EPS: "1e-12"
+  - type: report-score
+    task: average
+editable:
+  - solution.cpp

@@ -2,7 +2,7 @@ use std::{
     borrow::Cow,
     collections::HashMap,
     ffi::{OsStr, OsString},
-    fs,
+    fs, iter,
     path::{Path, PathBuf},
     process,
     rc::Rc,
@@ -355,6 +355,7 @@ impl TestContext {
                 .args(&args[1..])
                 // TODO: Move to config
                 .inherit_envs(["PATH", "USER", "HOME", "TERM"])
+                .with_envs(cfg.extra_env.iter())
                 .with_limits(limits)
                 .with_rw_mount(&*self.repo_root)
                 .with_cwd(self.task_context.full_path())
@@ -419,11 +420,11 @@ impl TestContext {
     ) -> Result<Vec<Snippet<'a, Annotation<'a>>>> {
         const ERROR_CTX: usize = 1;
 
-        let line_starts = text.lines().scan(0, |state, line| {
-            *state += line.len() + 1;
-            Some(*state)
-        });
-        let line_starts = std::iter::once(0).chain(line_starts).collect::<Vec<_>>();
+        let line_ends = text.match_indices('\n').map(|(i, _m)| i);
+        let line_starts = iter::once(0)
+            .chain(line_ends)
+            .chain(iter::once(text.len()))
+            .collect::<Vec<_>>();
 
         let line_count = line_starts.len() - 1;
 
@@ -470,7 +471,7 @@ impl TestContext {
                     .to_str_logged()?;
 
                 let mut snip = Snippet::source(snippet_str)
-                    .line_start(first_line + 1)
+                    .line_start(first_line)
                     .path(local_path)
                     .annotation(AnnotationKind::Primary.span(local_span.clone()));
                 snip = snip.annotation(AnnotationKind::Context.span(local_span).label(hint));

@@ -1,0 +1,22 @@
+tests:
+  - type: run-cmd
+    cmd: [build:test_c_strings]
+    profiles:
+      - asan
+      - release
+  - type: run-cmd
+    cmd: [build:test_c_strings_nostd]
+    profiles:
+      - release
+  - type: forbidden-patterns
+    token:
+      - <cstring>
+      - <string.h>
+      - memcpy
+      - memmove
+    hint: "Implement yourself"
+  - type: report-score
+    task: c-strings
+editable:
+  - no-alloc.cpp
+  - alloc.cpp

@@ -12,6 +12,10 @@
 #include <iostream>
 #include <random>
 
+#include <fcntl.h>
+#include <sys/resource.h>
+#include <unistd.h>
+
 #define CHECK_GUARD(guard)                                                     \
     do {                                                                       \
         auto check = guard.TestDescriptorsState();                             \
@@ -38,13 +42,20 @@ void ResetCinState() {
     std::clearerr(stdin);
 }
 
+static constexpr size_t kPipeSize = 4 << 10;
+
 TEST_CASE("CheckPipeCapacity") {
     INFO("This is an internal assertion, please report if it fails");
     int fds[2];
     int r = pipe(fds);
     REQUIRE(r != -1);
     int cap = fcntl(fds[0], F_GETPIPE_SZ);
-    REQUIRE(cap >= (4 << 10));
+    {
+        int err = errno;
+        INFO("Errno is " << err);
+        REQUIRE(cap != -1);
+    }
+    REQUIRE(static_cast<size_t>(cap) >= kPipeSize);
     close(fds[0]);
     close(fds[1]);
 }
@@ -135,7 +146,7 @@ TEST_CASE("EOF") {
 TEST_CASE("HugeIO") {
     FileDescriptorsGuard guard;
 
-    static constexpr size_t kBufSize = 4 << 10;
+    static constexpr size_t kBufSize = kPipeSize;
     std::mt19937 rng(Catch::getSeed());
 
     auto inp = GenerateStr(rng, kBufSize);
@@ -168,25 +179,26 @@ TEST_CASE("HugeIO") {
 }
 
 TEST_CASE("ErrorRecovery") {
-    static constexpr int kBaseFdCount = 6;  // 3 from the guard
-
     std::mt19937 rng(Catch::getSeed());
 
     FileDescriptorsGuard guard;
+    constexpr auto base_fd_count = 3;
 
-    for (int i = 0; i <= 10; ++i) {
-        RLimGuard files_guard(RLIMIT_NOFILE, kBaseFdCount + i);
+    for (size_t i = 0; i <= 10; ++i) {
         auto out = GenerateStr(rng, 10);
         auto err = GenerateStr(rng, 10);
         auto inp = GenerateStr(rng, 10);
 
         Flush();
-        auto result = CaptureOutput(
-            [&] {
-                (std::cout << out).flush();
-                std::cerr << err;
-            },
-            inp);
+        auto result = [&] {
+            RLimGuard files_guard(RLIMIT_NOFILE, base_fd_count + i);
+            return CaptureOutput(
+                [&] {
+                    (std::cout << out).flush();
+                    std::cerr << err;
+                },
+                inp);
+        }();
 
         if (i < 2) {
             REQUIRE(result.index() == 1);

@@ -1,0 +1,24 @@
+tests:
+  - type: run-cmd
+    cmd: [python3, tool:nej-runner, --run-cmd, build:solution_spiral, --output-file, output.dat]
+    profiles:
+      - asan
+      - release
+  - type: forbidden-patterns
+    groups:
+      - token:
+          - pwrite
+          - write
+          - ofstream
+          - fstream
+          - fopen
+        hint: "Use mmap for file IO"
+      - token:
+          - new
+        regex:
+          - (?:c|m|re)alloc
+        hint: "Don't do additional allocations"
+  - type: report-score
+    task: spiral
+editable:
+  - solution.cpp
