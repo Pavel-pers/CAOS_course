@@ -15,17 +15,17 @@ Node read_node(int fd, const size_t idx) {
     char buf[sizeof(Node)];
     size_t summary_bytes = 0;
     while (summary_bytes < NodeSize) {
-        ssize_t bytes_read = pread(fd, buf, NodeSize - summary_bytes,
-                                   static_cast<off_t>(
-                                       idx * NodeSize + summary_bytes));
+        ssize_t bytes_read =
+            pread(fd, buf, NodeSize - summary_bytes,
+                  static_cast<off_t>(idx * NodeSize + summary_bytes));
         if (bytes_read == -1) {
-            std::cerr << "Unable to read Node at index: " << idx << " erno:" <<
-                errno << std::endl;
+            std::cerr << "Unable to read Node at index: " << idx << " erno:"
+                << errno << std::endl;
             exit(1);
         }
         if (bytes_read == 0) {
-            std::cerr << "Unable to read Node at index: " << idx <<
-                " file clodsed" << std::endl;
+            std::cerr << "Unable to read Node at index: " << idx
+                << " file clodsed" << std::endl;
             exit(1);
         }
         summary_bytes += bytes_read;
