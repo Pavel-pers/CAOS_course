@@ -19,8 +19,8 @@ Node read_node(int fd, const size_t idx) {
             pread(fd, buf, NodeSize - summary_bytes,
                   static_cast<off_t>(idx * NodeSize + summary_bytes));
         if (bytes_read == -1) {
-            std::cerr << "Unable to read Node at index: " << idx << " erno:"
-                      << errno << std::endl;
+            std::cerr << "Unable to read Node at index: " << idx
+                      << " erno:" << errno << std::endl;
             exit(1);
         }
         if (bytes_read == 0) {
