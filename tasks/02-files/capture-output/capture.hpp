@@ -1,5 +1,7 @@
 #pragma once
 
+#include <fcntl.h>
+#include <iostream>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -9,16 +11,20 @@
 
 class OutputDescriptorInterceptor {
   public:
-    explicit OutputDescriptorInterceptor(const int fd) {
-        capture_fd_ = fd;
+    explicit OutputDescriptorInterceptor(const int fd) : capture_fd_(fd) {
+        pipe2(pipe_fd_, O_CLOEXEC);
         previous_fd_ = dup(fd);
-        pipe2(pipe_fd_, 0);
     }
 
-    [[nodiscard]] int RedirectOutput() const {
+    [[nodiscard]] int RedirectOutput() {
         if (dup2(pipe_fd_[1], capture_fd_) == -1) {
             return errno;
         }
+        if (close(pipe_fd_[1])) {
+            return errno;
+        }
+        pipe_fd_[1] = -1;
+
         return 0;
     }
 
@@ -26,17 +32,14 @@ class OutputDescriptorInterceptor {
         if (dup2(previous_fd_, capture_fd_) == -1) {
             return errno;
         }
-
-        if (pipe_fd_[1] != -1) {
-            if (close(pipe_fd_[1])) {
-                return errno;
-            }
-            pipe_fd_[1] = -1;
+        if (close(previous_fd_)) {
+            return errno;
         }
+        previous_fd_ = -1;
         return 0;
     }
 
-    [[nodiscard]] int CloseOutput() {
+    [[nodiscard]] int ClosePipeOutput() {
         if (pipe_fd_[0] != -1) {
             if (close(pipe_fd_[0])) {
                 return errno;
@@ -48,48 +51,43 @@ class OutputDescriptorInterceptor {
 
     ~OutputDescriptorInterceptor() {
         (void)RestoreOutput();
-        (void)CloseOutput();
+        (void)ClosePipeOutput();
     }
 
-    [[nodiscard]] int ReadOutput(std::string& output) {
-        if (const int rc = RestoreOutput()) {
-            return rc;
-        }
-
+    [[nodiscard]] int Drain(std::string& output) {
         char buf[4096];
         ssize_t bytes_read;
-
         while ((bytes_read = read(pipe_fd_[0], buf, sizeof(buf))) > 0) {
             output.append(buf, bytes_read);
         }
-
         if (bytes_read < 0) {
             return errno;
         }
-        if (const int rc = CloseOutput()) {
-            return rc;
-        }
-        return 0;
+
+        return ClosePipeOutput();
     }
 
   private:
     int pipe_fd_[2]{-1, -1};
     int previous_fd_;
-    int capture_fd_;
+    const int capture_fd_;
 };
 
 class InputDescriptorsInterceptor {
   public:
-    explicit InputDescriptorsInterceptor(const int fd) {
-        capture_fd_ = fd;
+    explicit InputDescriptorsInterceptor(const int fd) : capture_fd_(fd) {
         previous_fd_ = dup(fd);
-        pipe2(pipe_fd_, 0);
+        pipe2(pipe_fd_, O_CLOEXEC);
     }
 
     [[nodiscard]] int RedirectInput() const {
         if (dup2(pipe_fd_[0], capture_fd_) == -1) {
             return errno;
         }
+        if (close(pipe_fd_[0])) {
+            return errno;
+        }
+
         return 0;
     }
 
@@ -97,17 +95,15 @@ class InputDescriptorsInterceptor {
         if (dup2(previous_fd_, capture_fd_) == -1) {
             return errno;
         }
-
-        if (pipe_fd_[0] != -1) {
-            if (close(pipe_fd_[0])) {
-                return errno;
-            }
-            pipe_fd_[0] = -1;
+        if (close(previous_fd_)) {
+            return errno;
         }
+        previous_fd_ = -1;
+
         return 0;
     }
 
-    [[nodiscard]] int CloseInput() {
+    [[nodiscard]] int ClosePipeInput() {
         if (pipe_fd_[1] != -1) {
             if (close(pipe_fd_[1])) {
                 return errno;
@@ -119,7 +115,7 @@ class InputDescriptorsInterceptor {
 
     ~InputDescriptorsInterceptor() {
         (void)RestoreInput();
-        (void)CloseInput();
+        (void)ClosePipeInput();
     }
 
     [[nodiscard]] int WriteToInput(std::string_view input) {
@@ -131,7 +127,7 @@ class InputDescriptorsInterceptor {
             input.remove_prefix(static_cast<size_t>(written));
         }
 
-        if (const int rc = CloseInput()) {
+        if (const int rc = ClosePipeInput()) {
             return rc;
         }
         return 0;
@@ -140,7 +136,7 @@ class InputDescriptorsInterceptor {
   private:
     int pipe_fd_[2]{-1, -1};
     int previous_fd_;
-    int capture_fd_;
+    const int capture_fd_;
 };
 
 template <class F>
@@ -166,11 +162,23 @@ CaptureOutput(F&& f, const std::string_view input) {
 
     f();
 
-    std::string out, err;
-    if (int rc = output_di.ReadOutput(out)) {
+    std::cout.flush();
+    std::cerr.flush();
+    fflush(nullptr);
+
+    if (int rc = output_di.RestoreOutput()) {
         return rc;
     }
-    if (int rc = errput_di.ReadOutput(err)) {
+    if (int rc = errput_di.RestoreOutput()) {
+        return rc;
+    }
+
+    std::string out, err;
+    if (int rc = output_di.Drain(out)) {
+        return rc;
+    }
+
+    if (int rc = errput_di.Drain(err)) {
         return rc;
     }
 
