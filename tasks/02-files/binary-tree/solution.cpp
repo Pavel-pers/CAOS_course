@@ -21,7 +21,7 @@ Node read_node(int fd, const size_t idx) {
     off_t target_pos = static_cast<off_t>(idx) * static_cast<off_t>(NodeSize);
     if (lseek(fd, target_pos, SEEK_SET) == -1) {
         std::cerr << "Error: unable to seek to position " << target_pos
-            << "errno: " << errno << std::endl;
+                  << "errno: " << errno << std::endl;
         exit(1);
     }
 
@@ -32,12 +32,12 @@ Node read_node(int fd, const size_t idx) {
             read(fd, buf + summary_bytes, NodeSize - summary_bytes);
         if (bytes_read == -1) {
             std::cerr << "Unable to read Node at index: " << idx
-                << "  errno:" << errno << std::endl;
+                      << "  errno:" << errno << std::endl;
             exit(1);
         }
         if (bytes_read == 0) {
             std::cerr << "Unable to read Node at index: " << idx
-                << " file closed" << std::endl;
+                      << " file closed" << std::endl;
             exit(1);
         }
         summary_bytes += bytes_read;
