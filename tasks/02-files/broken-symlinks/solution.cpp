@@ -4,13 +4,13 @@
 #include <sys/types.h>
 
 bool isFileExists(const char* path) {
-    struct stat buffer {};
+    struct stat buffer{};
 
     return (stat(path, &buffer) == 0);
 }
 
 bool isBrokenLink(const char* path) {
-    struct stat link_stat {};
+    struct stat link_stat{};
 
     if (lstat(path, &link_stat) != 0) {
         return true;
