@@ -80,9 +80,6 @@ static void reverse_in_order_traversal(int fd, int32_t idx, size_t node_count) {
 }
 
 int main(int argc, char* argv[]) {
-    std::ios::sync_with_stdio(false);
-    std::cin.tie(nullptr);
-
     if (argc != 2) {
         return 1;
     }
