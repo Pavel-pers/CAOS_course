@@ -1,12 +1,12 @@
+#include <cerrno>
 #include <cstdint>
 #include <cstring>
 #include <fcntl.h>
 #include <iostream>
-#include <unistd.h>
-#include <vector>
-#include <cerrno>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <unistd.h>
+#include <vector>
 
 struct Node {
     int32_t key;
@@ -19,12 +19,15 @@ constexpr size_t NodeSize = sizeof(Node);
 static bool pread_full(int fd, void* buf, size_t n, off_t off) {
     size_t done = 0;
     while (done < n) {
-        ssize_t r = pread(fd, static_cast<char*>(buf) + done, n - done, off + done);
+        ssize_t r =
+            pread(fd, static_cast<char*>(buf) + done, n - done, off + done);
         if (r == 0) {
             return false;
         }
         if (r < 0) {
-            if (errno == EINTR) continue;
+            if (errno == EINTR) {
+                continue;
+            }
             return false;
         }
         done += static_cast<size_t>(r);
@@ -90,7 +93,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    struct stat st {};
+    struct stat st{};
 
     if (fstat(fd, &st) == -1) {
         std::cerr << "fstat failed (errno=" << errno << ")\n";
