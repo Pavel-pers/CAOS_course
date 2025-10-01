@@ -1,5 +1,4 @@
-#pragma once
-
+#include <errno.h>
 #include <fcntl.h>
 #include <iostream>
 #include <sstream>
@@ -9,142 +8,250 @@
 #include <utility>
 #include <variant>
 
-class OutputDescriptorInterceptor {
+inline int close_if_open(int& fd) {
+    if (fd != -1) {
+        if (close(fd) == -1) {
+            return errno;
+        }
+        fd = -1;
+    }
+    return 0;
+}
+
+class OutputInterceptor {
   public:
-    explicit OutputDescriptorInterceptor(const int fd) : capture_fd_(fd) {
-        pipe2(pipe_fd_, O_CLOEXEC);
-        previous_fd_ = dup(fd);
+    static std::variant<OutputInterceptor, int> Create(const int fd) {
+        int pipe_fd[2]{-1, -1};
+        const int previous_fd = dup(fd);
+        if (previous_fd == -1) {
+            return errno;
+        }
+        if (pipe(pipe_fd) == -1) {
+            close(pipe_fd[0]);
+            close(pipe_fd[1]);
+            close(previous_fd);
+            return errno;
+        }
+        return OutputInterceptor(fd, previous_fd, pipe_fd);
+    }
+
+    OutputInterceptor(const OutputInterceptor&) = delete;
+    OutputInterceptor& operator=(const OutputInterceptor&) = delete;
+
+    OutputInterceptor(OutputInterceptor&& other) noexcept
+        : previous_fd_(std::exchange(other.previous_fd_, -1)),
+          capture_fd_(other.capture_fd_) {
+        pipe_fd_[0] = std::exchange(other.pipe_fd_[0], -1);
+        pipe_fd_[1] = std::exchange(other.pipe_fd_[1], -1);
+    }
+
+    OutputInterceptor& operator=(OutputInterceptor&& other) noexcept {
+        if (this != &other) {
+            (void)RestoreOutput();
+            (void)ClosePipeRead();
+            (void)ClosePipeWrite();
+            previous_fd_ = std::exchange(other.previous_fd_, -1);
+            pipe_fd_[0] = std::exchange(other.pipe_fd_[0], -1);
+            pipe_fd_[1] = std::exchange(other.pipe_fd_[1], -1);
+        }
+        return *this;
     }
 
     [[nodiscard]] int RedirectOutput() {
         if (dup2(pipe_fd_[1], capture_fd_) == -1) {
             return errno;
         }
-        if (close(pipe_fd_[1])) {
-            return errno;
-        }
-        pipe_fd_[1] = -1;
-
-        return 0;
+        return ClosePipeWrite();
     }
 
     [[nodiscard]] int RestoreOutput() {
+        if (previous_fd_ == -1) {
+            return 0;
+        }
         if (dup2(previous_fd_, capture_fd_) == -1) {
             return errno;
         }
-        if (close(previous_fd_)) {
-            return errno;
-        }
-        previous_fd_ = -1;
-        return 0;
+        return close_if_open(previous_fd_);
     }
 
-    [[nodiscard]] int ClosePipeOutput() {
-        if (pipe_fd_[0] != -1) {
-            if (close(pipe_fd_[0])) {
-                return errno;
-            }
-            pipe_fd_[0] = -1;
-        }
-        return 0;
+    [[nodiscard]] int ClosePipeRead() {
+        return close_if_open(pipe_fd_[0]);
     }
 
-    ~OutputDescriptorInterceptor() {
-        (void)RestoreOutput();
-        (void)ClosePipeOutput();
+    [[nodiscard]] int ClosePipeWrite() {
+        return close_if_open(pipe_fd_[1]);
     }
 
-    [[nodiscard]] int Drain(std::string& output) {
-        char buf[4096];
-        ssize_t bytes_read;
-        while ((bytes_read = read(pipe_fd_[0], buf, sizeof(buf))) > 0) {
-            output.append(buf, bytes_read);
+    [[nodiscard]] int CloseBothPipeEnds() {
+        if (int rc = ClosePipeRead()) {
+            return rc;
         }
-        if (bytes_read < 0) {
-            return errno;
-        }
-
-        return ClosePipeOutput();
-    }
-
-  private:
-    int pipe_fd_[2]{-1, -1};
-    int previous_fd_;
-    const int capture_fd_;
-};
-
-class InputDescriptorsInterceptor {
-  public:
-    explicit InputDescriptorsInterceptor(const int fd) : capture_fd_(fd) {
-        previous_fd_ = dup(fd);
-        pipe2(pipe_fd_, O_CLOEXEC);
-    }
-
-    [[nodiscard]] int RedirectInput() const {
-        if (dup2(pipe_fd_[0], capture_fd_) == -1) {
-            return errno;
-        }
-        if (close(pipe_fd_[0])) {
-            return errno;
-        }
-
-        return 0;
-    }
-
-    [[nodiscard]] int RestoreInput() {
-        if (dup2(previous_fd_, capture_fd_) == -1) {
-            return errno;
-        }
-        if (close(previous_fd_)) {
-            return errno;
-        }
-        previous_fd_ = -1;
-
-        return 0;
-    }
-
-    [[nodiscard]] int ClosePipeInput() {
-        if (pipe_fd_[1] != -1) {
-            if (close(pipe_fd_[1])) {
-                return errno;
-            }
-            pipe_fd_[1] = -1;
-        }
-        return 0;
-    }
-
-    ~InputDescriptorsInterceptor() {
-        (void)RestoreInput();
-        (void)ClosePipeInput();
-    }
-
-    [[nodiscard]] int WriteToInput(std::string_view input) {
-        while (!input.empty()) {
-            ssize_t written = write(pipe_fd_[1], input.data(), input.size());
-            if (written < 0) {
-                return errno;
-            }
-            input.remove_prefix(static_cast<size_t>(written));
-        }
-
-        if (const int rc = ClosePipeInput()) {
+        if (int rc = ClosePipeWrite()) {
             return rc;
         }
         return 0;
     }
 
+    ~OutputInterceptor() {
+        (void)RestoreOutput();
+        (void)CloseBothPipeEnds();
+    }
+
+    [[nodiscard]] int Drain(std::string& output) {
+        char buf[4096];
+        for (;;) {
+            ssize_t n = read(pipe_fd_[0], buf, sizeof(buf));
+            if (n > 0) {
+                output.append(buf, static_cast<size_t>(n));
+            } else if (n == 0) {
+                break;
+            } else if (errno == EINTR) {
+                continue;
+            } else {
+                return errno;
+            }
+        }
+        return ClosePipeRead();
+    }
+
   private:
+    explicit OutputInterceptor(const int capture_fd, const int copy_fd,
+                               const int pipe_fd[])
+        : previous_fd_(copy_fd), capture_fd_(capture_fd) {
+        pipe_fd_[0] = pipe_fd[0];
+        pipe_fd_[1] = pipe_fd[1];
+    }
+
     int pipe_fd_[2]{-1, -1};
-    int previous_fd_;
+    int previous_fd_{-1};
+    const int capture_fd_;
+};
+
+class InputInterceptor {
+  public:
+    static std::variant<InputInterceptor, int> Create(const int fd) {
+        int pipe_fd[2]{-1, -1};
+        const int previous_fd = dup(fd);
+        if (previous_fd == -1) {
+            return errno;
+        }
+        if (pipe(pipe_fd) == -1) {
+            close(pipe_fd[0]);
+            close(pipe_fd[1]);
+            close(previous_fd);
+            return errno;
+        }
+        return InputInterceptor(fd, previous_fd, pipe_fd);
+    }
+
+    InputInterceptor(const InputInterceptor&) = delete;
+    InputInterceptor& operator=(const InputInterceptor&) = delete;
+
+    InputInterceptor(InputInterceptor&& other) noexcept
+        : previous_fd_(std::exchange(other.previous_fd_, -1)),
+          capture_fd_(other.capture_fd_) {
+        pipe_fd_[0] = std::exchange(other.pipe_fd_[0], -1);
+        pipe_fd_[1] = std::exchange(other.pipe_fd_[1], -1);
+    }
+
+    InputInterceptor& operator=(InputInterceptor&& other) noexcept {
+        if (this != &other) {
+            (void)RestoreInput();
+            (void)ClosePipeWrite();
+            (void)ClosePipeRead();
+            previous_fd_ = std::exchange(other.previous_fd_, -1);
+            pipe_fd_[0] = std::exchange(other.pipe_fd_[0], -1);
+            pipe_fd_[1] = std::exchange(other.pipe_fd_[1], -1);
+        }
+        return *this;
+    }
+
+    [[nodiscard]] int RedirectInput() {
+        if (dup2(pipe_fd_[0], capture_fd_) == -1) {
+            return errno;
+        }
+        return ClosePipeRead();
+    }
+
+    [[nodiscard]] int RestoreInput() {
+        if (previous_fd_ == -1) {
+            return 0;
+        }
+        if (dup2(previous_fd_, capture_fd_) == -1) {
+            return errno;
+        }
+        return close_if_open(previous_fd_);
+    }
+
+    [[nodiscard]] int ClosePipeWrite() {
+        return close_if_open(pipe_fd_[1]);
+    }
+
+    [[nodiscard]] int ClosePipeRead() {
+        return close_if_open(pipe_fd_[0]);
+    }
+
+    [[nodiscard]] int CloseBothPipeEnds() {
+        if (int rc = ClosePipeWrite()) {
+            return rc;
+        }
+        if (int rc = ClosePipeRead()) {
+            return rc;
+        }
+        return 0;
+    }
+
+    ~InputInterceptor() {
+        (void)RestoreInput();
+        (void)CloseBothPipeEnds();
+    }
+
+    [[nodiscard]] int WriteToInput(std::string_view input) {
+        while (!input.empty()) {
+            ssize_t n = write(pipe_fd_[1], input.data(), input.size());
+            if (n > 0) {
+                input.remove_prefix(static_cast<size_t>(n));
+            } else if (n == -1 && errno == EINTR) {
+                continue;
+            } else {
+                return errno;
+            }
+        }
+        return ClosePipeWrite();
+    }
+
+  private:
+    explicit InputInterceptor(const int capture_fd, const int copy_fd,
+                              const int pipe_fd[])
+        : previous_fd_(copy_fd), capture_fd_(capture_fd) {
+        pipe_fd_[0] = pipe_fd[0];
+        pipe_fd_[1] = pipe_fd[1];
+    }
+
+    int pipe_fd_[2]{-1, -1};
+    int previous_fd_{-1};
     const int capture_fd_;
 };
 
 template <class F>
 std::variant<std::pair<std::string, std::string>, int>
 CaptureOutput(F&& f, const std::string_view input) {
-    InputDescriptorsInterceptor input_di(0);
-    OutputDescriptorInterceptor output_di(1);
-    OutputDescriptorInterceptor errput_di(2);
+    auto in_m = InputInterceptor::Create(STDIN_FILENO);
+    if (std::holds_alternative<int>(in_m)) {
+        return std::get<int>(in_m);
+    }
+    auto out_m = OutputInterceptor::Create(STDOUT_FILENO);
+    if (std::holds_alternative<int>(out_m)) {
+        return std::get<int>(out_m);
+    }
+    auto err_m = OutputInterceptor::Create(STDERR_FILENO);
+    if (std::holds_alternative<int>(err_m)) {
+        return std::get<int>(err_m);
+    }
+
+    auto& input_di = std::get<InputInterceptor>(in_m);
+    auto& output_di = std::get<OutputInterceptor>(out_m);
+    auto& errput_di = std::get<OutputInterceptor>(err_m);
 
     if (int rc = input_di.RedirectInput()) {
         return rc;
@@ -164,7 +271,7 @@ CaptureOutput(F&& f, const std::string_view input) {
 
     std::cout.flush();
     std::cerr.flush();
-    fflush(nullptr);
+    std::fflush(nullptr);
 
     if (int rc = output_di.RestoreOutput()) {
         return rc;
@@ -177,7 +284,6 @@ CaptureOutput(F&& f, const std::string_view input) {
     if (int rc = output_di.Drain(out)) {
         return rc;
     }
-
     if (int rc = errput_di.Drain(err)) {
         return rc;
     }
