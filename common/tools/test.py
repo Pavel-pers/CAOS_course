@@ -305,9 +305,11 @@ def run_solution(input_file: Path, correct_file: Path, inf_file: Path, cmd: str,
                     output_file = 'fake-output.txt'
                     with open(output_file, 'wb') as f:
                         f.write(res)
-                checker_cmd = [str(checker), str(input_file), output_file, str(correct_file), str(p.returncode)]
+                checker_cmd = [str(checker), str(inf_file), str(input_file), output_file, str(correct_file), str(p.returncode)]
                 print(shlex.join(checker_cmd))
-                p = subprocess.run(checker_cmd, encoding='utf-8', input='')
+                env = os.environ.copy()
+                env["DIRENT"] = str(problem_dir / dirent)
+                p = subprocess.run(checker_cmd, encoding='utf-8', input='', env=env)
                 if p.returncode != 0:
                     if str(test) not in may_fail_local:
                         raise RuntimeError(f"Test {test} failed")

@@ -13,9 +13,20 @@ use which::which;
 #[derive(Debug, Default, Serialize, Deserialize, Clone, Copy)]
 pub struct CommandLimits {
     pub procs: Option<usize>,
-    pub memory: Option<usize>,
+    pub memory_mb: Option<usize>,
     pub wall_time_sec: Option<usize>,
     pub cpu_ms_per_sec: Option<usize>,
+}
+
+impl CommandLimits {
+    pub fn update_with(self, other: CommandLimits) -> Self {
+        Self {
+            procs: other.procs.or(self.procs),
+            memory_mb: other.memory_mb.or(self.memory_mb),
+            wall_time_sec: other.wall_time_sec.or(self.wall_time_sec),
+            cpu_ms_per_sec: other.cpu_ms_per_sec.or(self.cpu_ms_per_sec),
+        }
+    }
 }
 
 pub struct CommandBuilder {
@@ -187,7 +198,8 @@ impl CommandRunner for NSJailRunner {
             "inf",
             "--rlimit_stack",
             "inf",
-            "--rlimit_fsize", // TODO: Move to config
+            // TODO: Move to config
+            "--rlimit_fsize",
             "256",
             "--rlimit_nofile",
             "128",
@@ -208,7 +220,7 @@ impl CommandRunner for NSJailRunner {
 
         let limits = cmd.limits;
         for (argname, value) in [
-            ("--cgroup_mem_max", limits.memory),
+            ("--cgroup_mem_max", limits.memory_mb.map(|m| m << 20)),
             ("--time_limit", limits.wall_time_sec),
             ("--cgroup_pids_max", limits.procs),
             ("--cgroup_cpu_ms_per_sec", limits.cpu_ms_per_sec),

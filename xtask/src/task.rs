@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
 use walkdir::WalkDir;
 
-use crate::util::PathExt;
+use crate::{command::CommandLimits, util::PathExt};
 
 const TESTING_CONFIG_FILENAME: &str = "testing.yaml";
 
@@ -44,6 +44,9 @@ pub struct RunCmd {
 
     #[serde(default)]
     pub extra_env: HashMap<String, String>,
+
+    #[serde(default)]
+    pub limits: CommandLimits,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

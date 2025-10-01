@@ -1,0 +1,7 @@
+#! /bin/bash
+
+cat
+# sleep to detect single wait()
+sleep 0.1
+# to check that parent doesn't exec and always exiys with 0
+exit 1

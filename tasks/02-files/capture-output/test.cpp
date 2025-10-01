@@ -185,6 +185,8 @@ TEST_CASE("ErrorRecovery") {
     constexpr auto base_fd_count = 3;
 
     for (size_t i = 0; i <= 10; ++i) {
+        INFO("i = " << i);
+
         auto out = GenerateStr(rng, 10);
         auto err = GenerateStr(rng, 10);
         auto inp = GenerateStr(rng, 10);

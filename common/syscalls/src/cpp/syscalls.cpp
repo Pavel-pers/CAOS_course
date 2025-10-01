@@ -1,13 +1,11 @@
 #include <cpp/syscall_impl.hpp>
+#include <macros.hpp>
 #include <syscalls.hpp>
 
 #include <fcntl.h>
 #include <sys/syscall.h>
 
 int Errno = 0;
-
-#define CONCAT_X(a, b) a##b
-#define CONCAT(a, b) CONCAT_X(a, b)
 
 #define MAP0(m)
 #define MAP1(m, f, s) m(f, s)

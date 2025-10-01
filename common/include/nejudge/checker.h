@@ -7,8 +7,9 @@
 #include <ctype.h>
 #include <errno.h>
 
+#include "testinfo.h"
 
-int checker_main(int argc, char **argv);
+int checker_main(int argc, char **argv, testinfo_t* info);
 
 //struct testinfo_array
 //{
@@ -101,7 +102,7 @@ enum
     RUN_STATUS_SIZE      = 100
 };
 
-void checker_OK(void) {
+[[noreturn]] void checker_OK(void) {
     fprintf(stderr, "OK\n");
     exit(0);
 }
@@ -237,6 +238,10 @@ checker_normalize_file(char **lines, size_t *lines_num)
 }
 
 int main(int argc, char **argv) {
-
-    return checker_main(argc, argv);
+    testinfo_t ti;
+    memset(&ti, 0, sizeof(ti));
+    testinfo_parse(argv[1], &ti, NULL);
+    int retcode = checker_main(argc, argv, &ti);
+    testinfo_free(&ti);
+    return retcode;
 }

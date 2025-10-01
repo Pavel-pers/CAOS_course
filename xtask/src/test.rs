@@ -115,7 +115,7 @@ impl RepoConfig {
             manytask_course_name: "hse-caos-2025",
             default_limits: CommandLimits {
                 procs: Some(10),
-                memory: Some(256 << 20),
+                memory_mb: Some(256),
                 wall_time_sec: Some(10),
                 cpu_ms_per_sec: Some(3000),
             },
@@ -313,7 +313,7 @@ impl TestContext {
 
                 let processor = processors
                     .get(processor)
-                    .with_context(|| format!("processor {} not found", processor))?;
+                    .with_context(|| format!("processor \"{}\" not found", processor))?;
                 processor(self, profile, arg).map(Cow::from)
             };
             f
@@ -336,7 +336,7 @@ impl TestContext {
         let bin = args.first().context("no cmd was given")?;
 
         let cmd = {
-            let mut limits = self.repo_config.default_limits;
+            let mut limits = self.repo_config.default_limits.update_with(cfg.limits);
             let memory_multiplier = match profile {
                 // https://clang.llvm.org/docs/AddressSanitizer.html#limitations
                 BuildProfile::ASan => 3,
@@ -348,7 +348,7 @@ impl TestContext {
                 debug!(
                     "Increasing memory limit {memory_multiplier} times because build type is {profile:?}"
                 );
-                limits.memory = limits.memory.map(|m| m * memory_multiplier);
+                limits.memory_mb = limits.memory_mb.map(|m| m * memory_multiplier);
             }
 
             CommandBuilder::new(bin)

@@ -900,6 +900,7 @@ static const char * const error_codes[] =
                 [TINF_E_MULTIPLE_VALUE] = "variable value is multiple",
                 [TINF_E_INVALID_VALUE] = "variable value is invalid",
         };
+
 const char *
 testinfo_strerror(int err)
 {
