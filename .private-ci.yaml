@@ -140,6 +140,7 @@ build-container:
       when: on_success
     - when: never
   needs: ["push-public"]
+  timeout: 1h
   script:
     - docker build . -t domwst/caos-runner
     - docker push domwst/caos-runner
