@@ -169,7 +169,12 @@ def ignore_spaces_checker(res: bytes, correct: bytes):
     res_s = res.decode().split()
     cmp_s = correct.decode().split()
     if res_s != cmp_s:
-        raise RuntimeError(f"Output missmatched on test {test}. Check \"output\" file")
+        context = ""
+        if len(res_s) <= 100 and len(cmp_s) <= 100:
+            context = f"Expected: {cmp_s}, actual: {res_s}"
+        msg = f"Output missmatched on test {test}.{context}"\
+            " Check \"run/output\" file for more details"
+        raise RuntimeError(msg)
 
 
 def ignore_checker(res: bytes, correct: bytes):

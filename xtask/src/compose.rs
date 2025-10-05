@@ -2,6 +2,7 @@
 // https://gitlab.com/sergey-v-galtsev/nikka-public/-/blob/3f452a8ee780500e93257fb7d8402676631fac7d/tools/compose/src/main.rs
 use anyhow::{Context, Result, bail};
 use clap::Parser;
+use filetime::{FileTime, set_file_mtime};
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
@@ -344,6 +345,15 @@ impl Compose {
                     out_file.display()
                 )
             })?;
+        }
+
+        if let Some(out_path) = out_path {
+            let in_mtime = in_path
+                .metadata()
+                .and_then(|m| m.modified())
+                .with_context(|| format!("failed to stat file {}", in_path.display()))?;
+            set_file_mtime(out_path, FileTime::from_system_time(in_mtime))
+                .with_context(|| format!("failed to set mtime for {}", out_path.display()))?;
         }
 
         Ok(())

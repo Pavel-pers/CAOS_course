@@ -1,6 +1,7 @@
 #include "c-strings.hpp"
 
 #include <benchmark/run.hpp>
+#include <bit>
 #include <defer.hpp>
 
 #include <catch2/catch_test_macros.hpp>

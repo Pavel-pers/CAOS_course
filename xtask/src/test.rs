@@ -383,6 +383,7 @@ impl TestContext {
                 "Build-only mode, score for task {} is not reported",
                 cfg.task
             );
+            return Ok(());
         }
         let client = if let Some(ref client) = self.manytask_client {
             client

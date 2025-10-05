@@ -93,6 +93,7 @@ test-public-build:
       paths:
         - build_*/
   script:
+    - git restore-mtime
     - git clone https://gitlab.com/oleg-shatov/hse-caos-public.git public-repo
     - git -C public-repo restore-mtime
     - ./common/tools/export_to.sh public-repo --skip public-repo
@@ -151,5 +152,5 @@ build-container:
   script:
     - docker build . -t domwst/caos-runner
     - docker push domwst/caos-runner
-    - docker image prune -f --filter "until=24h"
+    - docker image prune -f --filter "until=5h"
     - docker system prune -f

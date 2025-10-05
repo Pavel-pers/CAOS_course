@@ -3299,6 +3299,7 @@ dependencies = [
  "anyhow",
  "clap",
  "derivative",
+ "filetime",
  "gix",
  "globset",
  "itertools",
