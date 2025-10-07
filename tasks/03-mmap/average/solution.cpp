@@ -18,7 +18,7 @@ int main(int argc, char* argv[]) {
         throw std::runtime_error("failed to open file");
     }
 
-    struct stat st {};
+    struct stat st{};
 
     if (fstat(fd, &st) == -1) {
         throw std::runtime_error("failed to stat file");
