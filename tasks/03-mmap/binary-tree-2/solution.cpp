@@ -34,7 +34,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    struct stat st {};
+    struct stat st{};
 
     if (fstat(fd, &st) == -1) {
         std::cerr << "Failed to stat file " << argv[1] << std::endl;
