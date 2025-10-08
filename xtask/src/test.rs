@@ -21,6 +21,7 @@ use crate::{
 };
 use annotate_snippets::{Annotation, AnnotationKind, Group, Level, Renderer, Snippet, renderer};
 use anyhow::{Context, Result, bail};
+use chrono::DateTime;
 use clap::Parser;
 use derivative::Derivative;
 use gix::{self, Repository};
@@ -402,12 +403,19 @@ impl TestContext {
             return Ok(());
         };
 
+        let commit_ts_var = "CI_COMMIT_TIMESTAMP";
+        let commit_time =
+            std::env::var(commit_ts_var).with_context(|| format!("no {commit_ts_var} variable"))?;
+        let commit_ts = DateTime::parse_from_rfc3339(&commit_time)
+            .with_context(|| format!("failed to parse {commit_time}"))?;
+
         info!("Reporting score for user {user}");
 
         client.report_score_with_retries(
             self.repo_config.manytask_course_name,
             &user,
             &cfg.task,
+            commit_ts,
         )?;
 
         Ok(())
