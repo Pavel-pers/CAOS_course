@@ -73,7 +73,7 @@ void TestRepeatedRandomDeallocations(size_t iterations, PCGRandom& rng) {
             ASSERT_ALLOC(pool[j], rng);
         }
 
-        Shuffle(pool, pool + N, rng);
+        nostd::Shuffle(pool, pool + N, rng);
 
         for (size_t j = M; j < N; ++j) {
             Deallocate16(pool[j]);

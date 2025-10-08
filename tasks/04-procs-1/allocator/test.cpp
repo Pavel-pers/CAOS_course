@@ -147,7 +147,7 @@ void TestRepeatedAllocations(PCGRandom& rng) {
             pool[j] = ptr;
         }
 
-        Shuffle(pool, pool + kPoolSize, rng);
+        nostd::Shuffle(pool, pool + kPoolSize, rng);
 
         for (size_t j = 0; j < kPoolSize; ++j) {
             Deallocate(pool[j]);
@@ -197,7 +197,7 @@ struct TreeGenerator {
         if (rng() % LargeChildChance == 0 && large_cnt_remaining > 0) {
             --large_cnt_remaining;
             node.children.Resize(2048);
-            Shuffle(node.children.begin(), node.children.end(), rng);
+            nostd::Shuffle(node.children.begin(), node.children.end(), rng);
         }
 
         return node;
@@ -205,7 +205,7 @@ struct TreeGenerator {
 };
 
 void DeleteTree(TreeNode node, PCGRandom& rng) {
-    Shuffle(node.children.begin(), node.children.end(), rng);
+    nostd::Shuffle(node.children.begin(), node.children.end(), rng);
     for (auto&& child : node.children) {
         DeleteTree(std::move(child), rng);
     }
@@ -215,7 +215,7 @@ void TrimRoot(TreeNode& root, size_t max_size, PCGRandom& rng) {
     if (root.children.Size() <= max_size) {
         return;
     }
-    Shuffle(root.children.begin(), root.children.end(), rng);
+    nostd::Shuffle(root.children.begin(), root.children.end(), rng);
     root.children.Resize(max_size);
 }
 

@@ -13,10 +13,12 @@ try:
 except ImportError:
     def cache(func):
         return func
-from typing import Optional, Any, cast, Union
+from typing import Optional, Any, cast, Union, Tuple, List
 import difflib
 import shutil
 import resource
+import ctypes
+import ctypes.util
 
 repo_root = Path(os.path.realpath(__file__)).parent.parent.parent
 problem_dir = os.getcwd()
@@ -228,9 +230,10 @@ def run_solution(input_file: Path, correct_file: Path, inf_file: Path, cmd: str,
     else:
         full_cmd = full_cmd_origin
     print(shlex.join(full_cmd), flush=True)
-    env = os.environ
+    env = os.environ.copy()
+    if meta.get('nuke_environ', False):
+        env = {}
     if env_add:
-        env = env.copy()
         if meta.get('enable_subst', False):
             env.update((key, val.replace('${problem.problem_dir}', problem_dir)) for key, val in env_add.items())
         else:
@@ -245,8 +248,8 @@ def run_solution(input_file: Path, correct_file: Path, inf_file: Path, cmd: str,
         'start_new_session': True,  # Isolate process
         'env': env,
     }
-    if 'max_process_count' in meta and is_pipeline:
-        m = int(cast(str, meta.get('max_process_count')))
+    if (proc_count := meta.get('max_process_count')) is not None and is_pipeline:
+        m = int(cast(str, proc_count))
 
         def preexec_fn():
             print(resource.getrlimit(resource.RLIMIT_NPROC), file=sys.stderr)
@@ -350,6 +353,15 @@ def run_solution(input_file: Path, correct_file: Path, inf_file: Path, cmd: str,
             raise RuntimeError(f'Time limit exceed: {after_children_user - before_children_user} > {real_time_limit} secs')
         else:
             print('ERROR:', f'Time limit exceed: {after_children_user - before_children_user} > {real_time_limit} secs')
+
+    children = find_children()
+    if len(children) > 0:
+        limit = 5
+        raise RuntimeError(
+            f"Found {len(children)} orphan processes. First {min(len(children), limit)} "
+            f"of them are: {children[:limit]}"
+        )
+
     return res
 
 
@@ -382,10 +394,7 @@ def parse_inf_file(f):
                 raise RuntimeError("Duplicated params")
             res[key] = val
         elif key == 'environ' or key == 'compiler_env':
-            key = 'environ'
-            if key not in res:
-                res[key] = {}
-            parse_env(val, res[key])
+            parse_env(val, res.setdefault('environ', {}))
         elif key == 'interactor_env':
             if key not in res:
                 res[key] = {}
@@ -405,7 +414,7 @@ def parse_inf_file(f):
         else:
             raise RuntimeError(f"Unknown inf param {key} = {val}")
 
-    flags = {'enable_subst', 'check_stderr'}
+    flags = {'enable_subst', 'check_stderr', 'nuke_environ'}
 
     for line in f.readlines():
         line = line.strip()
@@ -422,6 +431,44 @@ def parse_inf_file(f):
         else:
             raise RuntimeError(f"Unknown param '{line}'")
     return res
+
+
+libc = ctypes.CDLL(ctypes.util.find_library("c"), use_errno=True)
+PR_SET_CHILD_SUBREAPER = 36
+
+
+def set_child_subreaper():
+    if libc.prctl(PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0) != 0:
+        e = ctypes.get_errno()
+        raise OSError(e, os.strerror(e))
+
+
+def read_proc(pid: int) -> Tuple[int, List[str]]:
+    with open(f"/proc/{pid}/stat", "rb") as f:
+        s = f.read()
+    r = s.rfind(b')')
+    fields = s[r + 2:].split()
+    ppid = int(fields[1])
+
+    with open(f"/proc/{pid}/cmdline", "rb") as f:
+        cmd = f.read()
+    cmd = list(map(bytes.decode, cmd.split(b"\0")))
+    return ppid, cmd
+
+
+def find_children(parent=os.getpid()) -> List[Tuple[int, List[str]]]:
+    children = []
+    for name in os.listdir("/proc"):
+        if not name.isdigit():
+            continue
+        pid = int(name)
+        try:
+            ppid, cmd = read_proc(pid)
+        except Exception:
+            continue
+        if ppid == parent:
+            children.append((pid, cmd))
+    return children
 
 
 parser = argparse.ArgumentParser()
@@ -447,6 +494,8 @@ if is_pipeline:
     args.may_fail_local = []
 else:
     args.user = None
+
+set_child_subreaper()
 
 for cnt in range(args.retests_count):
     print(f"Trying tests #{cnt}")

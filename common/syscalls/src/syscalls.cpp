@@ -78,3 +78,6 @@ DEFINE_SYSCALL(void*, MReMap, mremap, void*, old_addr, void*, old_size, size_t,
                new_size, int, flags, void*, new_addr)
 
 DEFINE_SYSCALL(int, MAdvise, madvise, void*, addr, size_t, length, int, advice)
+
+DEFINE_SYSCALL(int, ExecVE, execve, const char*, filename, const char**, argv,
+               const char**, envp)

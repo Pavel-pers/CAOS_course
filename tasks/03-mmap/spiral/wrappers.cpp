@@ -16,7 +16,6 @@ struct MainGlitch final : MainGuard {
             assert(fd >= 0);
             int truncate_ret = ftruncate(fd, prefill_size);
             assert(truncate_ret == 0);
-            (void)truncate_ret;
 
             close(fd);
         }

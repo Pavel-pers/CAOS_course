@@ -24,3 +24,5 @@ void* MReMap(void* old_addr, size_t old_size, size_t new_size, int flags,
              void* new_addr);
 
 int MAdvise(void* addr, size_t length, int advice);
+
+int ExecVE(const char* filename, const char** argv, const char** envp);

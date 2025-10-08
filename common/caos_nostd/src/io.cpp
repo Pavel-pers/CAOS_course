@@ -3,6 +3,10 @@
 #include <strings.hpp>
 #include <syscalls.hpp>
 
+#include <unistd.h>
+
+namespace nostd {
+
 int WriteAll(int fd, const char* message, size_t len) {
     auto remaining = len;
     while (remaining > 0) {
@@ -20,7 +24,25 @@ int WriteAll(int fd, const char* message, size_t len) {
     return static_cast<int>(len);
 }
 
-void Print(const char* message) {
-    int written = WriteAll(1, message, StrLen(message));
+void PrintTo(int fd, const char* message) {
+    int written = WriteAll(fd, message, StrLen(message));
     ASSERT_NO_REPORT(written != -1);
+}
+
+void Print(const char* message) {
+    PrintTo(STDOUT_FILENO, message);
+}
+
+void EPrint(const char* message) {
+    PrintTo(STDERR_FILENO, message);
+}
+
+}  // namespace nostd
+
+int WriteAll(int fd, const char* message, size_t len) {
+    return nostd::WriteAll(fd, message, len);
+}
+
+void Print(const char* message) {
+    nostd::Print(message);
 }

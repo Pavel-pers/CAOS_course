@@ -2,6 +2,8 @@
 
 #include <utility>
 
+namespace nostd {
+
 template <class It, class Rng>
 void Shuffle(It begin, It end, Rng& rng) {
     using DifferenceT = decltype(end - begin);
@@ -17,3 +19,5 @@ void Shuffle(It begin, It end, Rng& rng) {
         std::swap(*(begin + idx), *it);
     }
 }
+
+}  // namespace nostd

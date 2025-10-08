@@ -16,4 +16,4 @@
 
 Для выполнения системных вызовов используйте методы из заголовочного файла
 [`syscalls.hpp`](../common/syscalls/include/syscalls.hpp). Для дебажного вывода
-используйте функцию `Print` из заголовочного файла [`io.hpp`](../common/nostd/include/io.hpp).
+используйте функцию `nostd::Print` из заголовочного файла [`io.hpp`](../common/nostd/include/io.hpp).

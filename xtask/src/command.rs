@@ -44,10 +44,11 @@ impl CommandBuilder {
     pub fn new(cmd_name: impl Into<OsString>) -> Self {
         let cmd_name = cmd_name.into();
 
-        const DEFAULT_RO_MOUNTS: [&str; 9] = [
+        const DEFAULT_RO_MOUNTS: [&str; 10] = [
             "/bin",
             "/usr/bin",
             "/usr/sbin",
+            "/usr/libexec",
             "/sbin",
             "/lib",
             "/lib64",

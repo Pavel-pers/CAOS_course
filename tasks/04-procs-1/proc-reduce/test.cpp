@@ -3,20 +3,20 @@
 #include <benchmark/run.hpp>
 #include <build.hpp>
 #include <fd-guard.hpp>
+#include <internal-assert.hpp>
 #include <pcg-random.hpp>
 
 #include <catch2/catch_get_random_seed.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <cstdint>
+#include <numeric>
+#include <ranges>
 
 template <class F>
 uint64_t CorrectReduce(uint64_t from, uint64_t to, uint64_t init, F&& f) {
-    uint64_t result = init;
-    for (auto i = from; i < to; ++i) {
-        result = f(result, i);
-    }
-    return result;
+    auto r = std::views::iota(from, to);
+    return std::accumulate(r.begin(), r.end(), init, std::forward<F>(f));
 }
 
 uint64_t Inv64(uint64_t x) {
@@ -36,6 +36,7 @@ auto Conjugate(F op, uint64_t seed) {
     auto k = rng.Generate64() | 1;
     auto b = rng.Generate64();
     auto invk = Inv64(k);
+    INTERNAL_ASSERT(invk * k == 1);
 
     return [op = std::move(op), k, b, invk](uint64_t lhs, uint64_t rhs) {
         lhs = k * lhs + b;
@@ -48,8 +49,8 @@ auto Conjugate(F op, uint64_t seed) {
 
 #define CHECK_SAME_RESULT(from, to, init, f, par)                              \
     do {                                                                       \
-        auto correct = Reduce(from, to, init, f, par);                         \
-        auto actual = CorrectReduce(from, to, init, f);                        \
+        auto actual = Reduce(from, to, init, f, par);                          \
+        auto correct = CorrectReduce(from, to, init, f);                       \
         CHECK(correct == actual);                                              \
     } while (false)
 
