@@ -2,6 +2,7 @@
 
 #include <benchmark/run.hpp>
 #include <defer.hpp>
+#include <bit>
 
 #include <catch2/catch_test_macros.hpp>
 
