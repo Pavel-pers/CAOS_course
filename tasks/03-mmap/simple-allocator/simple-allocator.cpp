@@ -9,10 +9,10 @@
 class AllocatorState {
   public:
     void* Allocate16() {
-        if (cur_free) {
-            void* cur_ptr = cur_free;
-            cur_free = next_free;
-            return static_cast<void*>(cur_ptr);
+        if (free_list) {
+            FreeListNode* n = free_list;
+            free_list = n->next;
+            return static_cast<void*>(n);
         }
 
         if (cur_page && used + kBlockSize <= kPageSize) {
@@ -25,11 +25,16 @@ class AllocatorState {
     }
 
     void Deallocate(void* ptr) {
-        next_free = cur_free;
-        cur_free = ptr;
+        auto* n = static_cast<FreeListNode*>(ptr);
+        n->next = free_list;
+        free_list = n;
     }
 
   private:
+    struct FreeListNode {
+        FreeListNode* next;
+    };
+
     void* make_new_page() {
         void* page = MMap(nullptr, kPageSize, PROT_READ | PROT_WRITE,
                           MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
@@ -45,8 +50,7 @@ class AllocatorState {
     static constexpr size_t kBlockSize = 16;
     static constexpr size_t kPageSize = 1 << 12;
 
-    void* cur_free;
-    void* next_free;
+    FreeListNode* free_list;
     char* cur_page;
     size_t used;
 };
