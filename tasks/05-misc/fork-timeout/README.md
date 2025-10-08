@@ -1,9 +1,11 @@
 # Fork timeout
 
 Многие из вас знакомы с утилитой [timeout](https://man7.org/linux/man-pages/man1/timeout.1.html). Она позволяет запускать программы с лимитом времени. Например, команда
+
 ```
 timeout 10s sleep 30
 ```
+
 принудительно завершится за 10 секунд.
 
 В этой задаче предлагается реализовать эту утилиту. В файле [timeout.cpp](./timeout.cpp) нужно написать исходный код утилиты. Ваша программа должна имплементировать следующую [usage message](https://en.wikipedia.org/wiki/Usage_message):
