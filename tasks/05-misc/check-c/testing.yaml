@@ -1,0 +1,9 @@
+tests:
+  - type: run-cmd
+    cmd: [python3, tool:nej-runner, --checker, cmp, --run-cmd, build:solution_check_c]
+    profiles:
+      - release
+  - type: report-score
+    task: check-c
+editable:
+  - solution.cpp

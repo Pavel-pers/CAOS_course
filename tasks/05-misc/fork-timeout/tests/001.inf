@@ -1,0 +1,3 @@
+params = 1 sleep 2
+time_limit_ms = 1500
+exit_code = 124

@@ -1,0 +1,1 @@
+add_caos_executable(solution_utf_wc solution.cpp)

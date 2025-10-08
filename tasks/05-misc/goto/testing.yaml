@@ -1,0 +1,10 @@
+tests:
+  - type: run-cmd
+    cmd: [build:test_goto]
+    profiles:
+      - asan
+      - release
+  - type: report-score
+    task: goto
+editable:
+  - count-substrings.cpp

@@ -1,0 +1,3 @@
+enable_subst
+nuke_environ
+params = a;non-existent;non-existent| p;echo;echo;Found|

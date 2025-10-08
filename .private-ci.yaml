@@ -125,12 +125,6 @@ push-public:
     - git config --global user.name "Oleg Shatov"
     - git config --global user.email "oleq.shatov@yandex.ru"
     - git clone --depth 2 https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.com/oleg-shatov/hse-caos-public.git public-repo
-    - ./common/tools/export_to.sh public-repo --skip public-repo
-    - |
-      (cd public-repo &&
-      git add . &&
-      git commit --allow-empty -m "$(sed -E 's/^pub(-manual|-ci-skip)?: //' <<< "$CI_COMMIT_TITLE")" &&
-      git push https://caos:${PUSH_TO_PUBLIC_TOKEN}@gitlab.com/oleg-shatov/hse-caos-public.git HEAD:main)
     - >
       curl --fail --silent -X POST -H "Authorization: Bearer $MT_TESTER_TOKEN"
       -H "Content-type: application/x-yaml" --data-binary "@.manytask.yaml"
@@ -138,6 +132,12 @@ push-public:
     - >
       curl --fail --silent -X POST -H "Authorization: Bearer $MT_TESTER_TOKEN"
       "https://manytask.hse-caos.org/api/$MT_COURSE_NAME/update_cache"
+    - ./common/tools/export_to.sh public-repo --skip public-repo
+    - |
+      (cd public-repo &&
+      git add . &&
+      git commit --allow-empty -m "$(sed -E 's/^pub(-manual|-ci-skip)?: //' <<< "$CI_COMMIT_TITLE")" &&
+      git push https://caos:${PUSH_TO_PUBLIC_TOKEN}@gitlab.com/oleg-shatov/hse-caos-public.git HEAD:main)
 
 build-container:
   extends:

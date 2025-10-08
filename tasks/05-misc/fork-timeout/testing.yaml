@@ -1,0 +1,13 @@
+tests:
+  - type: run-cmd
+    cmd: [python3, tool:nej-runner, --checker, cmp, --run-cmd, build:solution_fork_timeout]
+    profiles:
+      - release
+  - type: forbidden-patterns
+    substring:
+      - poll
+    hint: "use wait-based concurrency"
+  - type: report-score
+    task: fork-timeout
+editable:
+  - timeout.cpp

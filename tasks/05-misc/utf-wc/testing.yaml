@@ -1,0 +1,17 @@
+tests:
+  - type: run-cmd
+    cmd: [python3, tool:nej-runner, --checker, cmp, --run-cmd, build:solution_utf_wc]
+    profiles:
+      - asan
+      - release
+  - type: forbidden-patterns
+    substring:
+      - getwc
+      - getws
+      - wchar
+      - wstring
+    hint: "Parse utf-8 manually"
+  - type: report-score
+    task: utf-wc
+editable:
+  - solution.cpp

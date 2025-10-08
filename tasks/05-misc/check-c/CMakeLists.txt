@@ -1,0 +1,1 @@
+add_caos_executable(solution_check_c solution.cpp)

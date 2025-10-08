@@ -1,0 +1,2 @@
+add_caos_executable(harness_execvpe execvpe.cpp harness.cpp)
+target_link_libraries(harness_execvpe PRIVATE caos_nostd c_strings_nostd)
