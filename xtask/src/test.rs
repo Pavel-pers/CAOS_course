@@ -403,9 +403,9 @@ impl TestContext {
             return Ok(());
         };
 
-        let commit_ts_var = "CI_COMMIT_TIMESTAMP";
+        const COMMIT_TS_VAR: &str = "CI_PIPELINE_CREATED_AT";
         let commit_time =
-            std::env::var(commit_ts_var).with_context(|| format!("no {commit_ts_var} variable"))?;
+            std::env::var(COMMIT_TS_VAR).with_context(|| format!("no {COMMIT_TS_VAR} variable"))?;
         let commit_ts = DateTime::parse_from_rfc3339(&commit_time)
             .with_context(|| format!("failed to parse {commit_time}"))?;
 
