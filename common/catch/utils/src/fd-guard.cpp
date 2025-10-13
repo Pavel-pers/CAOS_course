@@ -47,11 +47,15 @@ FileDescriptorsGuard::FileDescriptorsGuard() {
     }
 
     auto max_fd_num = MaxFdNum();
-    INTERNAL_ASSERT(fds.back() + fds.size() < max_fd_num);
+    INTERNAL_ASSERT(2 * fds.size() < max_fd_num);
 
     auto cur_fd_num = static_cast<int>(max_fd_num - 1);
     for (auto fd : fds) {
-        int ret = dup2(fd, cur_fd_num);
+        while (std::ranges::find(fds, cur_fd_num) != fds.end()) {
+            --cur_fd_num;
+        }
+
+        int ret = dup3(fd, cur_fd_num, O_CLOEXEC);
         INTERNAL_ASSERT(ret != -1);
         copies.emplace_back(fd, cur_fd_num);
         --cur_fd_num;

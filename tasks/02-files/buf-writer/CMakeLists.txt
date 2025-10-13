@@ -1,2 +1,3 @@
-add_catch_executable(test_buf_writer test.cpp)
+add_caos_executable(test_buf_writer test.cpp)
 target_link_libraries(test_buf_writer PRIVATE glitch caos_utils)
+add_catch_libs(test_buf_writer)

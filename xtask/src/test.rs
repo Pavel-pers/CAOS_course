@@ -561,7 +561,24 @@ impl TestContext {
 
         let fmt_runner = self.repo_config.get_tool_path("clang-fmt-runner")?;
 
-        ClangFmtRunner::new(Rc::clone(&self.repo_root), fmt_runner)?.check(solution_files.iter())
+        fn check_extension(p: &Path) -> bool {
+            let e = if let Some(e) = p.extension() {
+                e
+            } else {
+                return false;
+            };
+            ["c", "cpp", "h", "hpp"]
+                .into_iter()
+                .any(|ext| OsStr::new(ext) == e)
+        }
+
+        let files_iter = solution_files.iter().filter(|p| check_extension(p));
+
+        if files_iter.clone().count() == 0 {
+            return Ok(());
+        }
+
+        ClangFmtRunner::new(Rc::clone(&self.repo_root), fmt_runner)?.check(files_iter)
     }
 }
 
