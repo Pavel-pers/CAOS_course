@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
     rc::Rc,
 };
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 use walkdir::WalkDir;
 
 use clap::Parser;
@@ -99,6 +99,11 @@ impl MoveContext {
                     let target = fs::read_link(&path_from).with_context(|| {
                         format!("failed to read link at {}", path_from.display())
                     })?;
+                    info!(
+                        "Creating symlink {} {}",
+                        path_to.display(),
+                        target.display()
+                    );
                     std::os::unix::fs::symlink(&target, &path_to).with_context(|| {
                         format!(
                             "failed to create symlink {} {}",
@@ -109,12 +114,9 @@ impl MoveContext {
                 } else if meta.is_file() {
                     fs::copy(&path_from, &path_to)?;
                 } else if meta.is_dir() {
-                    if path_to != ctx_to.full_path() {
-                        warn!("Skipping {}", path_to.display());
-                        fs::create_dir(&path_to).with_context(|| {
-                            format!("failed to create directory {}", path_to.display())
-                        })?;
-                    }
+                    fs::create_dir(&path_to).with_context(|| {
+                        format!("failed to create directory {}", path_to.display())
+                    })?;
                 } else {
                     bail!(
                         "File {} with metadata {:?} have unknown type",
