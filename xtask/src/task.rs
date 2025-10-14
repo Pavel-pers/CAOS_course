@@ -117,10 +117,13 @@ pub(crate) struct TaskContext {
 }
 
 impl TaskContext {
-    pub(crate) fn new(task_abs_path: &Path, repo_root: Rc<Path>) -> Result<Self> {
+    pub(crate) fn new_with_config(
+        task_abs_path: &Path,
+        repo_root: Rc<Path>,
+        config_path: &Path,
+    ) -> Result<Self> {
         let r: Result<_> = try {
-            let config_path = task_abs_path.join(TESTING_CONFIG_FILENAME);
-            let config_file = fs::File::open(&config_path)
+            let config_file = fs::File::open(config_path)
                 .with_context(|| format!("failed to open {}", config_path.display()))?;
             let test_config = serde_yml::from_reader(config_file)
                 .with_context(|| format!("failed to parse {}", config_path.display()))?;
@@ -133,6 +136,14 @@ impl TaskContext {
             }
         };
         r.with_context(|| format!("creating task context for {}", task_abs_path.display()))
+    }
+
+    pub(crate) fn new(task_abs_path: &Path, repo_root: Rc<Path>) -> Result<Self> {
+        Self::new_with_config(task_abs_path, repo_root, &Self::config_path(task_abs_path))
+    }
+
+    pub fn config_path(task_abs_path: &Path) -> PathBuf {
+        task_abs_path.join(TESTING_CONFIG_FILENAME)
     }
 
     pub fn is_task(path: &Path) -> Result<bool> {

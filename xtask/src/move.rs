@@ -67,7 +67,11 @@ impl MoveContext {
                 continue;
             }
 
-            let ctx_from = TaskContext::new(&from_path, Rc::clone(&self.from.repo_root))?;
+            let ctx_from = TaskContext::new_with_config(
+                &from_path,
+                Rc::clone(&self.from.repo_root),
+                &TaskContext::config_path(entry.path()),
+            )?;
 
             debug!("Found task {}", ctx_to.task_path.display());
 
