@@ -16,7 +16,7 @@ include(cmake/Arch.cmake)
 include(cmake/Helpers.cmake)
 include(cmake/Flags.cmake)
 
-add_subdirectory(common)
 include_directories(common/include)
+add_subdirectory(common)
 
 add_subdirectory(tasks)

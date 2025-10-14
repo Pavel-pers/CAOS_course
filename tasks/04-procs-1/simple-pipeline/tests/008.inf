@@ -1,0 +1,2 @@
+params = ./bad-cat ./bad-cat
+comment = "cat + sleep + exit(1)"

@@ -1,32 +1,19 @@
 include(CheckCXXCompilerFlag)
 
-set(CMAKE_CXX_FLAGS_ASAN
-    "${CMAKE_CXX_FLAGS_ASAN} -g -fsanitize=address,undefined -fno-sanitize-recover=all -DASAN"
-    CACHE STRING "Additional compiler flags in asan builds"
-    FORCE
-)
+if ("${CMAKE_BUILD_TYPE}" STREQUAL "Release")
+    # NOTE: FORTIFY_SOURCE may cause issues in freestanding builds
+    add_compile_options(-UNDEBUG -O2 -DRELEASE -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3)
+elseif("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
+    add_compile_options(-DDEBUG)
+elseif("${CMAKE_BUILD_TYPE}" STREQUAL "Asan")
+    add_compile_options(-fsanitize=address,undefined -fno-sanitize-recover=all -DASAN)
+    add_link_options(-fsanitize=address,undefined)
+elseif("${CMAKE_BUILD_TYPE}" STREQUAL "Tsan")
+    add_compile_options(-fsanitize=thread -fno-sanitize-recover=all -DTSAN)
+    add_link_options(-fsanitize=thread)
+endif()
 
-set(CMAKE_CXX_FLAGS_TSAN
-    "${CMAKE_CXX_FLAGS_TSAN} -g -fsanitize=thread -fno-sanitize-recover=all -DTSAN"
-    CACHE STRING "Additional compiler flags in asan builds"
-    FORCE
-)
-
-set(CMAKE_CXX_FLAGS_DEBUG
-    "${CMAKE_CXX_FLAGS_DEBUG} -g -DDEBUG"
-    CACHE STRING "Additional compiler flags in debug builds"
-    FORCE
-)
-
-set(CMAKE_CXX_FLAGS_RELEASE
-    "${CMAKE_CXX_FLAGS_RELEASE} -O2 -g -DRELEASE -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3"
-    CACHE STRING "Additional compiler flags in debug builds"
-    FORCE
-)
-
-set(CMAKE_CXX_FLAGS
-    "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wpedantic -Werror"
-)
+add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:-Wall;-Wextra;-Wpedantic;-Werror>")
 
 function (add_flag_if_supported flag)
     string(MAKE_C_IDENTIFIER "${flag}" _id)

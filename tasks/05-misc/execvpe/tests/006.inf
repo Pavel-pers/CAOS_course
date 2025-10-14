@@ -1,0 +1,4 @@
+enable_subst
+nuke_environ
+environ = PATHN= PATH=
+params = a;echo;echo;123;321| a;echo.sh;echo.sh|

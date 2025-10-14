@@ -1,6 +1,8 @@
 use anyhow::{Context, Result, anyhow};
 use std::{path::Path, process};
 
+use crate::command::{CommandBuilder, CommandRunner};
+
 pub trait PathExt {
     fn to_str_logged(&self) -> Result<&str>;
 
@@ -24,12 +26,12 @@ impl PathExt for Path {
     }
 }
 
-pub trait CmdExt {
-    fn status_logged(&mut self) -> Result<process::ExitStatus>;
+pub trait CommandRunnerExt {
+    fn status_logged(&self, cmd: &CommandBuilder) -> Result<process::ExitStatus>;
 }
 
-impl CmdExt for process::Command {
-    fn status_logged(&mut self) -> Result<process::ExitStatus> {
-        self.status().with_context(|| format!("running {self:?}"))
+impl<T: CommandRunner + ?Sized> CommandRunnerExt for T {
+    fn status_logged(&self, cmd: &CommandBuilder) -> Result<process::ExitStatus> {
+        self.status(cmd).with_context(|| format!("running {cmd:?}"))
     }
 }

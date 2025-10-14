@@ -10,17 +10,15 @@ use std::{
 
 use crate::{
     command::{CommandBuilder, CommandLimits, CommandRunner, NSJailRunner, NativeCommandRunner},
-    task::ReportScore,
-    util::{CmdExt, ManytaskClient, PathExt},
-};
-use crate::{
     task::{
-        BuildProfile, ForbiddenPatterns, ForbiddenPatternsGroup, RunCmd, TaskContext, TestStep,
+        BuildProfile, ForbiddenPatterns, ForbiddenPatternsGroup, ReportScore, RunCmd, TaskContext,
+        TestStep,
     },
-    util::ClangFmtRunner,
+    util::{ClangFmtRunner, CommandRunnerExt, ManytaskClient, PathExt},
 };
 use annotate_snippets::{Annotation, AnnotationKind, Group, Level, Renderer, Snippet, renderer};
 use anyhow::{Context, Result, bail};
+use chrono::DateTime;
 use clap::Parser;
 use derivative::Derivative;
 use gix::{self, Repository};
@@ -115,7 +113,7 @@ impl RepoConfig {
             manytask_course_name: "hse-caos-2025",
             default_limits: CommandLimits {
                 procs: Some(10),
-                memory: Some(256 << 20),
+                memory_mb: Some(256),
                 wall_time_sec: Some(10),
                 cpu_ms_per_sec: Some(3000),
             },
@@ -150,6 +148,8 @@ struct TestContext {
 }
 
 impl TestContext {
+    const INHERIT_VARS: [&str; 4] = ["PATH", "USER", "HOME", "TERM"];
+
     fn new(args: TestArgs) -> Result<Self> {
         let repo = gix::discover(".")?;
 
@@ -197,22 +197,31 @@ impl TestContext {
         profile: BuildProfile,
         fresh: bool,
     ) -> Result<process::ExitStatus> {
-        let mut cmd = process::Command::new("cmake");
+        let mut cmd = CommandBuilder::new("cmake")
+            .inherit_envs(Self::INHERIT_VARS)
+            .inherit_envs(["CXX", "CC"]);
         if fresh {
-            cmd.arg("--fresh");
+            cmd = cmd.arg("--fresh");
         }
-        cmd.arg(format!("-DCMAKE_BUILD_TYPE={}", profile.cmake_build_type()))
+        cmd = cmd
+            .arg(format!("-DCMAKE_BUILD_TYPE={}", profile.cmake_build_type()))
             .arg("-B")
             .arg(build_dir)
             .arg("-S")
-            .arg(self.repo_root.as_ref());
+            .arg(self.repo_root.as_ref())
+            .with_rw_mount(&*self.repo_root)
+            .with_cwd(&*self.repo_root);
         debug!("Running cmake: {cmd:?}");
-        cmd.status_logged()
+        self.cmd_runner.status_logged(&cmd)
     }
 
     fn build_target(&self, target: &str, profile: BuildProfile) -> Result<PathBuf> {
         let build_dir = self.repo_root.join(profile.build_dir());
         if !build_dir.exists() {
+            debug!(
+                "Build directory {} doesn't exist, creating",
+                build_dir.display()
+            );
             fs::create_dir(&build_dir)
                 .with_context(|| format!("failed to create {}", build_dir.display()))?;
             self.run_cmake(&build_dir, profile, false)?;
@@ -220,16 +229,19 @@ impl TestContext {
 
         let cpus_str = format!("{}", num_cpus::get());
         let build = || {
-            let mut build_cmd = process::Command::new("cmake");
-            build_cmd
+            let build_cmd = CommandBuilder::new("cmake")
+                .inherit_envs(Self::INHERIT_VARS)
+                .inherit_envs(["CXX", "CC"])
                 .arg("--build")
                 .arg(&build_dir)
                 .arg("--target")
                 .arg(target)
                 .arg("-j")
-                .arg(&cpus_str);
+                .arg(&cpus_str)
+                .with_rw_mount(&*self.repo_root)
+                .with_cwd(&*self.repo_root);
             debug!("Running build: {build_cmd:?}");
-            build_cmd.status_logged()
+            self.cmd_runner.status_logged(&build_cmd)
         };
 
         let target_path = build_dir.join(target);
@@ -313,7 +325,7 @@ impl TestContext {
 
                 let processor = processors
                     .get(processor)
-                    .with_context(|| format!("processor {} not found", processor))?;
+                    .with_context(|| format!("processor \"{}\" not found", processor))?;
                 processor(self, profile, arg).map(Cow::from)
             };
             f
@@ -336,7 +348,7 @@ impl TestContext {
         let bin = args.first().context("no cmd was given")?;
 
         let cmd = {
-            let mut limits = self.repo_config.default_limits;
+            let mut limits = self.repo_config.default_limits.update_with(cfg.limits);
             let memory_multiplier = match profile {
                 // https://clang.llvm.org/docs/AddressSanitizer.html#limitations
                 BuildProfile::ASan => 3,
@@ -348,16 +360,17 @@ impl TestContext {
                 debug!(
                     "Increasing memory limit {memory_multiplier} times because build type is {profile:?}"
                 );
-                limits.memory = limits.memory.map(|m| m * memory_multiplier);
+                limits.memory_mb = limits.memory_mb.map(|m| m * memory_multiplier);
             }
 
             CommandBuilder::new(bin)
                 .args(&args[1..])
                 // TODO: Move to config
-                .inherit_envs(["PATH", "USER", "HOME", "TERM"])
+                .inherit_envs(Self::INHERIT_VARS)
                 .with_envs(cfg.extra_env.iter())
                 .with_limits(limits)
-                .with_rw_mount(&*self.repo_root)
+                .with_ro_mount(&*self.repo_root)
+                .with_rw_mount(self.task_context.full_path())
                 .with_cwd(self.task_context.full_path())
         };
 
@@ -374,6 +387,13 @@ impl TestContext {
     }
 
     fn report_score(&self, cfg: &ReportScore) -> Result<()> {
+        if self.args.build_only {
+            debug!(
+                "Build-only mode, score for task {} is not reported",
+                cfg.task
+            );
+            return Ok(());
+        }
         let client = if let Some(ref client) = self.manytask_client {
             client
         } else {
@@ -391,12 +411,19 @@ impl TestContext {
             return Ok(());
         };
 
+        const COMMIT_TS_VAR: &str = "CI_PIPELINE_CREATED_AT";
+        let commit_time =
+            std::env::var(COMMIT_TS_VAR).with_context(|| format!("no {COMMIT_TS_VAR} variable"))?;
+        let commit_ts = DateTime::parse_from_rfc3339(&commit_time)
+            .with_context(|| format!("failed to parse {commit_time}"))?;
+
         info!("Reporting score for user {user}");
 
         client.report_score_with_retries(
             self.repo_config.manytask_course_name,
             &user,
             &cfg.task,
+            commit_ts,
         )?;
 
         Ok(())
@@ -542,7 +569,25 @@ impl TestContext {
 
         let fmt_runner = self.repo_config.get_tool_path("clang-fmt-runner")?;
 
-        ClangFmtRunner::new(Rc::clone(&self.repo_root), fmt_runner)?.check(solution_files.iter())
+        fn check_extension(p: &Path) -> bool {
+            let e = if let Some(e) = p.extension() {
+                e
+            } else {
+                return false;
+            };
+            ["c", "cpp", "h", "hpp"]
+                .into_iter()
+                .any(|ext| OsStr::new(ext) == e)
+        }
+
+        let files_iter = solution_files.iter().filter(|p| check_extension(p));
+
+        if files_iter.clone().count() == 0 {
+            return Ok(());
+        }
+
+        ClangFmtRunner::new(Rc::clone(&self.repo_root), fmt_runner)?
+            .check(&*self.cmd_runner, files_iter)
     }
 }
 

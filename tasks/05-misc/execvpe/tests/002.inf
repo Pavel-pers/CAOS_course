@@ -1,0 +1,3 @@
+enable_subst
+nuke_environ
+params = a;${problem.problem_dir}/static/non-exec.sh;non-exec.sh| p;${problem.problem_dir}/static/echo.sh;echo;Exists|

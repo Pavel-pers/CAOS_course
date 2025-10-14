@@ -1,6 +1,9 @@
 stages:
   - test
 
+default:
+  cache: []
+
 test_solutions:
   image: domwst/caos-runner
   tags: [caos]
@@ -16,7 +19,7 @@ test_solutions:
   script:
     - >
       (cd /public;
-      git pull origin main &&
+      (git pull origin main || echo "Failed to fetch updates from public repo") &&
       cargo xtask move --from $CI_PROJECT_DIR --to . &&
       ./common/tools/test_tasks_with_diff.sh $CI_PROJECT_DIR)
 

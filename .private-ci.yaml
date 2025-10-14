@@ -83,16 +83,24 @@ check-rust-infra:
   variables:
     GIT_STRATEGY: clone
 
-test-public-repo-build:
+test-public-build:
   extends: [.test-base, .clone-repo]
   variables:
     CARGO_HOME: "${CARGO_HOME_BASE}-clang"
     CARGO_TARGET_DIR: "${CARGO_TARGET_DIR_BASE}-clang"
+  cache:
+    - key: test-public-build
+      paths:
+        - build_*/
   script:
+    - git restore-mtime
     - git clone https://gitlab.com/oleg-shatov/hse-caos-public.git public-repo
+    - git -C public-repo restore-mtime
     - ./common/tools/export_to.sh public-repo --skip public-repo
+    - mkdir -p build_{release,debug,asan,tsan}
     - |
       (cd public-repo;
+      for i in ../build_*; do ln -s $i .; done;
       CXX=$(which clang++-19) CC=$(which clang-19) ./common/tools/build_all_tasks.sh &&
       echo "Public diff:" &&
       git add -N . &&
@@ -117,12 +125,6 @@ push-public:
     - git config --global user.name "Oleg Shatov"
     - git config --global user.email "oleq.shatov@yandex.ru"
     - git clone --depth 2 https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.com/oleg-shatov/hse-caos-public.git public-repo
-    - ./common/tools/export_to.sh public-repo --skip public-repo
-    - |
-      (cd public-repo &&
-      git add . &&
-      git commit --allow-empty -m "$(sed -E 's/^pub(-manual|-ci-skip)?: //' <<< "$CI_COMMIT_TITLE")" &&
-      git push https://caos:${PUSH_TO_PUBLIC_TOKEN}@gitlab.com/oleg-shatov/hse-caos-public.git HEAD:main)
     - >
       curl --fail --silent -X POST -H "Authorization: Bearer $MT_TESTER_TOKEN"
       -H "Content-type: application/x-yaml" --data-binary "@.manytask.yaml"
@@ -130,6 +132,12 @@ push-public:
     - >
       curl --fail --silent -X POST -H "Authorization: Bearer $MT_TESTER_TOKEN"
       "https://manytask.hse-caos.org/api/$MT_COURSE_NAME/update_cache"
+    - ./common/tools/export_to.sh public-repo --skip public-repo
+    - |
+      (cd public-repo &&
+      git add . &&
+      git commit --allow-empty -m "$(sed -E 's/^pub(-manual|-ci-skip)?: //' <<< "$CI_COMMIT_TITLE")" &&
+      git push https://caos:${PUSH_TO_PUBLIC_TOKEN}@gitlab.com/oleg-shatov/hse-caos-public.git HEAD:main)
 
 build-container:
   extends:
@@ -140,8 +148,9 @@ build-container:
       when: on_success
     - when: never
   needs: ["push-public"]
+  timeout: 1h
   script:
     - docker build . -t domwst/caos-runner
     - docker push domwst/caos-runner
-    - docker image prune -f --filter "until=24h"
+    - docker image prune -f --filter "until=5h"
     - docker system prune -f

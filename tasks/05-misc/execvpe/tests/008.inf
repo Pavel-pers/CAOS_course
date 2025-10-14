@@ -1,0 +1,4 @@
+enable_subst
+nuke_environ
+environ = PATHH=. PATH=${problem.problem_dir}/static/subdir:${problem.problem_dir}/static
+params = p;echo;echo|

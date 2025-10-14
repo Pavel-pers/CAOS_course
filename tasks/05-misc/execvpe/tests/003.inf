@@ -1,0 +1,4 @@
+enable_subst
+nuke_environ
+environ = PATHN=/usr/local/bin PATH=/usr/bin:/usr/local/bin:${problem.problem_dir}/static
+params = a;non-exec.sh;non-exec.sh| p;echo.sh;echo;123;321|

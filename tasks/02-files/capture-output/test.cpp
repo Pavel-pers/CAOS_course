@@ -1,9 +1,9 @@
 #include "capture.hpp"
 
 #include <distributions.hpp>
-#include <fd_guard.hpp>
+#include <fd-guard.hpp>
 #include <overload.hpp>
-#include <rlim_guard.hpp>
+#include <rlim-guard.hpp>
 
 #include <catch2/catch_get_random_seed.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -15,12 +15,6 @@
 #include <fcntl.h>
 #include <sys/resource.h>
 #include <unistd.h>
-
-#define CHECK_GUARD(guard)                                                     \
-    do {                                                                       \
-        auto check = guard.TestDescriptorsState();                             \
-        CHECK(check);                                                          \
-    } while (false)
 
 void Flush() {
     std::cout.flush();
@@ -72,7 +66,7 @@ TEST_CASE("JustWorks") {
         CHECK(out == "");
         CHECK(err == "");
         CHECK(runs == 1);
-        CHECK_GUARD(guard);
+        CHECK(guard.TestDescriptorsState());
     }
 
     SECTION("Output") {
@@ -88,7 +82,7 @@ TEST_CASE("JustWorks") {
         auto [out, err] = std::get<0>(std::move(result));
         CHECK(out == "Aba");
         CHECK(err == "Caba");
-        CHECK_GUARD(guard);
+        CHECK(guard.TestDescriptorsState());
     }
 
     SECTION("Input+Output") {
@@ -113,7 +107,7 @@ TEST_CASE("JustWorks") {
         auto [out, err] = std::get<0>(std::move(result));
         CHECK(out == "1 3 ");
         CHECK(err == "2 ");
-        CHECK_GUARD(guard);
+        CHECK(guard.TestDescriptorsState());
     }
 }
 
@@ -140,7 +134,7 @@ TEST_CASE("EOF") {
     auto [out, err] = std::get<0>(std::move(result));
     CHECK(out == "1357");
     CHECK(err == "2468");
-    CHECK_GUARD(guard);
+    CHECK(guard.TestDescriptorsState());
 }
 
 TEST_CASE("HugeIO") {
@@ -175,7 +169,7 @@ TEST_CASE("HugeIO") {
     auto [out, err] = std::get<0>(std::move(result));
     CHECK(out == my_out);
     CHECK(err == my_err);
-    CHECK_GUARD(guard);
+    CHECK(guard.TestDescriptorsState());
 }
 
 TEST_CASE("ErrorRecovery") {
@@ -185,6 +179,8 @@ TEST_CASE("ErrorRecovery") {
     constexpr auto base_fd_count = 3;
 
     for (size_t i = 0; i <= 10; ++i) {
+        INFO("i = " << i);
+
         auto out = GenerateStr(rng, 10);
         auto err = GenerateStr(rng, 10);
         auto inp = GenerateStr(rng, 10);
@@ -220,7 +216,7 @@ TEST_CASE("ErrorRecovery") {
                    },
                    std::move(result));
 
-        CHECK_GUARD(guard);
+        CHECK(guard.TestDescriptorsState());
     }
 }
 

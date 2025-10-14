@@ -1,0 +1,29 @@
+#! /bin/bash
+
+open_files=$(find /proc/$$/fd -exec readlink {} \+)
+
+count_fd () {
+    echo "$open_files" | FILE="$(readlink /proc/$$/fd/$1)" awk 'BEGIN {count = 0} $0 == ENVIRON["FILE"] {count++} END {print count}'
+}
+
+# count only reopened stdin/stdout and their duplicates
+in_open_cnt=$(count_fd 0)
+out_open_cnt=$(count_fd 1)
+
+if [ "$out_open_cnt" != 1 ]; then
+    echo stdout fd leak detected >&2
+    # More realistic case:
+    # launch-daemon | write-launch-logs
+    # launch-daemon creates a daemoj, which redirects its output to some other file
+    # If a copy of stdout fd is leaked into daemon process, the pipe will remain open and write-launch-logs won't finish
+    exec sleep 2
+fi
+
+# check stdin, just in case
+if [ "$in_open_cnt" != 1 ]; then
+    echo stdin fd leak detected >&2
+    kill $(grep -i ppid /proc/$$/status | cut -f 2)
+    exit 1
+fi
+
+exec cat

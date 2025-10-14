@@ -1,6 +1,7 @@
 use std::fmt;
 
 use anyhow::{Context, Result};
+use chrono::{DateTime, FixedOffset};
 use gix::bstr::ByteSlice;
 use reqwest::{
     blocking::{Client, ClientBuilder},
@@ -35,12 +36,25 @@ impl ManytaskClient {
         r.context("trying to create manytask client")
     }
 
-    pub fn report_score(&self, course: &str, student: &str, task: &str) -> Result<()> {
+    pub fn report_score(
+        &self,
+        course: &str,
+        student: &str,
+        task: &str,
+        commit_ts: DateTime<FixedOffset>,
+    ) -> Result<()> {
         let r: Result<()> = try {
             let resp = self
                 .client
                 .post(format!("{}/api/{}/report", self.base_url, course))
-                .form(&[("task", task), ("username", student)])
+                .form(&[
+                    ("task", task),
+                    ("username", student),
+                    (
+                        "submit_time",
+                        &commit_ts.format("%Y-%m-%d %H:%M:%S%z").to_string(),
+                    ),
+                ])
                 .send()?
                 .error_for_status()?;
 
@@ -57,10 +71,16 @@ impl ManytaskClient {
         r.with_context(|| format!("trying to report {}, {}, {}", course, student, task))
     }
 
-    pub fn report_score_with_retries(&self, course: &str, student: &str, task: &str) -> Result<()> {
+    pub fn report_score_with_retries(
+        &self,
+        course: &str,
+        student: &str,
+        task: &str,
+        commit_ts: DateTime<FixedOffset>,
+    ) -> Result<()> {
         let mut i = 0;
         loop {
-            let r = self.report_score(course, student, task);
+            let r = self.report_score(course, student, task, commit_ts);
             i += 1;
             if i == 3 {
                 return r;
@@ -69,6 +89,7 @@ impl ManytaskClient {
                 Ok(v) => return Ok(v),
                 Err(e) => warn!("Failed to report score: {e:?}"),
             }
+            std::thread::sleep(std::time::Duration::from_secs(1 << i));
         }
     }
 }

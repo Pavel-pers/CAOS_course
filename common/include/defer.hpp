@@ -1,5 +1,6 @@
 #pragma once
 
+#include <macros.hpp>
 #include <utility>
 
 template <class F>
@@ -14,3 +15,5 @@ struct Defer {
   private:
     F f_;
 };
+
+#define DEFER Defer UNIQUE_ID(_defer_guard) = [&]()

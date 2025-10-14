@@ -2,6 +2,7 @@
 // https://gitlab.com/sergey-v-galtsev/nikka-public/-/blob/3f452a8ee780500e93257fb7d8402676631fac7d/tools/compose/src/main.rs
 use anyhow::{Context, Result, bail};
 use clap::Parser;
+use filetime::{FileTime, set_file_mtime};
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
@@ -271,7 +272,7 @@ impl Compose {
         let mut glob_builder = GlobSetBuilder::new();
 
         let mut add_glob = |path: &str| -> Result<()> {
-            let path = path.trim().trim_end_matches("/");
+            let path = path.trim().trim_matches('/');
             if path.is_empty() || path.starts_with("#") {
                 return Ok(());
             }
@@ -344,6 +345,15 @@ impl Compose {
                     out_file.display()
                 )
             })?;
+        }
+
+        if let Some(out_path) = out_path {
+            let in_mtime = in_path
+                .metadata()
+                .and_then(|m| m.modified())
+                .with_context(|| format!("failed to stat file {}", in_path.display()))?;
+            set_file_mtime(out_path, FileTime::from_system_time(in_mtime))
+                .with_context(|| format!("failed to set mtime for {}", out_path.display()))?;
         }
 
         Ok(())
@@ -438,11 +448,14 @@ impl Compose {
                 continue;
             }
 
-            if new_in_path.is_symlink() {
+            let metadata_in = fs::symlink_metadata(&new_in_path)
+                .with_context(|| format!("failed to stat {}", new_in_path.display()))?;
+
+            if metadata_in.is_symlink() {
                 self.process_symlink(&new_in_path, new_out_path.as_deref())?;
-            } else if new_in_path.is_dir() {
+            } else if metadata_in.is_dir() {
                 self.process_dir(&new_in_path, new_out_path.as_deref())?;
-            } else if new_in_path.is_file() {
+            } else if metadata_in.is_file() {
                 self.process_file(&new_in_path, new_out_path.as_deref())?;
             } else {
                 bail!("unknown thing at {}", new_in_path.display());

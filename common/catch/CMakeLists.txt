@@ -8,12 +8,16 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(Catch2)
 
-add_library(ut_main ut_main.cpp)
-target_link_libraries(ut_main PUBLIC Catch2::Catch2WithMain)
+add_library(ut_main STATIC ut_main.cpp)
+target_link_libraries(ut_main PUBLIC Catch2::Catch2)
 
 add_subdirectory(utils)
 
+function(add_catch_libs target)
+    target_link_libraries(${target} PRIVATE ut_main catch_utils)
+endfunction()
+
 function(add_catch_executable name)
     add_caos_executable(${name} ${ARGN})
-    target_link_libraries(${name} PRIVATE ut_main catch_utils)
+    add_catch_libs(${name})
 endfunction()

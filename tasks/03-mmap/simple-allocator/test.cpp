@@ -2,9 +2,11 @@
 
 #include <algorithms.hpp>
 #include <assert.hpp>
-#include <random.hpp>
+#include <pcg-random.hpp>
 #include <strings.hpp>
 #include <syscalls.hpp>
+
+#include <utility>
 
 constexpr size_t kBlockSize = 16;
 
@@ -18,6 +20,8 @@ void Use(void* ptr, PCGRandom& rng) {
 #define ASSERT_ALLOC(ptr, rng)                                                 \
     do {                                                                       \
         ASSERT(ptr != nullptr, "Allocation failed");                           \
+        ASSERT(reinterpret_cast<uintptr_t>(ptr) % 16 == 0,                     \
+               "Not aligned properly");                                        \
         Use(ptr, rng);                                                         \
     } while (false)
 
@@ -69,7 +73,7 @@ void TestRepeatedRandomDeallocations(size_t iterations, PCGRandom& rng) {
             ASSERT_ALLOC(pool[j], rng);
         }
 
-        Shuffle(pool, pool + N, rng);
+        nostd::Shuffle(pool, pool + N, rng);
 
         for (size_t j = M; j < N; ++j) {
             Deallocate16(pool[j]);
@@ -81,7 +85,35 @@ void TestRepeatedRandomDeallocations(size_t iterations, PCGRandom& rng) {
     }
 }
 
-extern "C" [[noreturn]] void Main() {
+struct Node {
+    Node* next;
+    void* payload;
+};
+
+static_assert(sizeof(Node) == kBlockSize);
+
+void Exhaust(size_t blocks, PCGRandom& rng) {
+    blocks >>= 1;
+    Node* head = nullptr;
+    for (size_t i = 0; i < blocks; ++i) {
+        auto node_raw = Allocate16();
+        ASSERT_ALLOC(node_raw, rng);
+        auto node = reinterpret_cast<Node*>(node_raw);
+        node->next = std::exchange(head, node);
+
+        auto payload = Allocate16();
+        ASSERT_ALLOC(payload, rng);
+        node->payload = payload;
+    }
+
+    while (head != nullptr) {
+        auto node = std::exchange(head, head->next);
+        Deallocate16(node->payload);
+        Deallocate16(node);
+    }
+}
+
+int Main(int, char**, char**) {
     PCGRandom rng{321};
 
     RUN_TEST(TestSimple, rng);
@@ -95,5 +127,7 @@ extern "C" [[noreturn]] void Main() {
     RUN_TEST((TestRepeatedRandomDeallocations<2048, 1536>), 1000, rng);
     RUN_TEST((TestRepeatedRandomDeallocations<2048, 1792>), 1000, rng);
 
-    Exit(0);
+    RUN_TEST(Exhaust, (200 << 20) / kBlockSize, rng);
+
+    return 0;
 }
