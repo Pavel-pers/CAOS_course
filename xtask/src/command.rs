@@ -8,6 +8,7 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
+use tracing::debug;
 use which::which;
 
 #[derive(Debug, Default, Serialize, Deserialize, Clone, Copy)]
@@ -29,6 +30,7 @@ impl CommandLimits {
     }
 }
 
+#[derive(Debug)]
 pub struct CommandBuilder {
     pub cmd_name: OsString,
     pub args: Vec<OsString>,
@@ -37,6 +39,8 @@ pub struct CommandBuilder {
     pub limits: CommandLimits,
     pub mounts_ro: Vec<PathBuf>,
     pub mounts_rw: Vec<PathBuf>,
+    pub mounts_sym: Vec<PathBuf>,
+    pub mounts_tmpfs: Vec<PathBuf>,
 }
 
 #[allow(dead_code)]
@@ -44,18 +48,27 @@ impl CommandBuilder {
     pub fn new(cmd_name: impl Into<OsString>) -> Self {
         let cmd_name = cmd_name.into();
 
-        const DEFAULT_RO_MOUNTS: [&str; 10] = [
+        const DEFAULT_RO_MOUNTS: [&str; 7] = [
             "/bin",
-            "/usr/bin",
-            "/usr/sbin",
-            "/usr/libexec",
-            "/sbin",
+            "/etc",
             "/lib",
             "/lib64",
-            "/usr/lib",
-            "/usr/lib64",
-            "/etc",
+            "/sbin",
+            "/usr",
+            "/dev/random",
         ];
+        const DEFAULT_RW_MOUNTS: [&str; 1] = ["/dev/null"];
+        const DEFAULT_SYM_MOUNTS: [&str; 4] = [
+            "/proc/self/fd:/dev/fd",
+            "/dev/fd/0:/dev/stdin",
+            "/dev/fd/1:/dev/stdout",
+            "/dev/fd/2:/dev/stderr",
+        ];
+        const DEFAULT_TMPFS_MOUNTS: [&str; 2] = ["/tmp", "/dev"];
+
+        fn convert<const N: usize>(args: [&str; N]) -> Vec<PathBuf> {
+            args.map(PathBuf::from).into()
+        }
 
         Self {
             cmd_name: cmd_name.clone(),
@@ -63,8 +76,10 @@ impl CommandBuilder {
             cwd: None,
             env: HashMap::new(),
             limits: Default::default(),
-            mounts_ro: DEFAULT_RO_MOUNTS.into_iter().map(PathBuf::from).collect(),
-            mounts_rw: vec![],
+            mounts_ro: convert(DEFAULT_RO_MOUNTS),
+            mounts_rw: convert(DEFAULT_RW_MOUNTS),
+            mounts_sym: convert(DEFAULT_SYM_MOUNTS),
+            mounts_tmpfs: convert(DEFAULT_TMPFS_MOUNTS),
         }
     }
 
@@ -209,12 +224,15 @@ impl CommandRunner for NSJailRunner {
             "-q",
         ]);
 
-        for p in &cmd.mounts_ro {
-            c.arg("-R").arg(p);
-        }
-
-        for p in &cmd.mounts_rw {
-            c.arg("-B").arg(p);
+        for (flag, paths) in [
+            ("-T", &cmd.mounts_tmpfs),
+            ("-R", &cmd.mounts_ro),
+            ("-B", &cmd.mounts_rw),
+            ("-s", &cmd.mounts_sym),
+        ] {
+            for p in paths {
+                c.arg(flag).arg(p);
+            }
         }
 
         if let Some(ref cwd) = cmd.cwd {
@@ -247,6 +265,8 @@ impl CommandRunner for NSJailRunner {
             which(&cmd.cmd_name).map_err(|e| io::Error::new(io::ErrorKind::NotFound, e))?;
         c.arg(cmd_name);
         c.args(&cmd.args);
+
+        debug!("Running nsjail: {c:?}");
 
         c.status()
     }
