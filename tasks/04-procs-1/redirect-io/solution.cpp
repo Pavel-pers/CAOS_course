@@ -31,7 +31,7 @@ int main(int argc, char** argv) {
         std::cerr << "open failed" << std::endl;
         exit(1);
     }
-    int fd_out = open(out_file, O_WRONLY | O_CREAT | O_CLOEXEC, 0666);
+    int fd_out = open(out_file, O_WRONLY | O_CREAT | O_CLOEXEC | O_TRUNC, 0666);
     if (fd_out == -1) {
         std::cerr << "open failed" << std::endl;
         exit(1);
