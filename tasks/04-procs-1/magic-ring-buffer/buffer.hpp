@@ -47,7 +47,6 @@ struct RingBuffer {
             munmap(static_cast<char*>(reserve) + B, B);
             return errno;
         }
-        
 
         munmap(static_cast<char*>(origin_buf) + B, B);
 
