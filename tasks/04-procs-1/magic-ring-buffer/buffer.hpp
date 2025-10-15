@@ -14,6 +14,10 @@ struct RingBuffer {
     static constexpr size_t kPageSize = 1 << 12;
 
     static std::variant<RingBuffer, int> Create(size_t capacity) noexcept {
+        if (capacity == 0) {
+            capacity = 1;
+        }
+
         size_t bytes_count = capacity * sizeof(ElementType);
         size_t B = (bytes_count + kPageSize - 1) & ~(kPageSize - 1);
         size_t item_cap = B / sizeof(ElementType);
@@ -39,8 +43,7 @@ struct RingBuffer {
             mremap(origin_tmp, B, B, MREMAP_MAYMOVE | MREMAP_FIXED, reserve);
         if (origin_buf == MAP_FAILED) {
             std::cerr << "unluck :(";
-            munmap(origin_tmp, B);
-            munmap(reserve, 2 * B);
+            munmap(static_cast<char*>(origin_tmp) + B, B);
             return errno;
         }
 
@@ -51,7 +54,7 @@ struct RingBuffer {
             static_cast<char*>(origin_buf) + B);
         if (mirror_buf == MAP_FAILED) {
             std::cerr << "unluck :(";
-            munmap(reserve, 2 * B);
+            munmap(origin_buf, 2 * B);
             return errno;
         }
 
