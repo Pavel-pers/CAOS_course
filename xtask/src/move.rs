@@ -96,7 +96,18 @@ impl MoveContext {
                 }
             }
 
-            for path_from in ctx_from.find_editable_files()? {
+            let source_editable_files = match ctx_from.find_editable_files() {
+                Ok(f) => f,
+                Err(e) => {
+                    warn!(
+                        "No editable files found in {}, skipping",
+                        ctx_to.task_path.display()
+                    );
+                    warn!("Reason: {e}");
+                    continue;
+                }
+            };
+            for path_from in source_editable_files {
                 let file_path = ctx_from.strip_task_root_logged(&path_from)?;
                 let path_to = ctx_to.path_of(file_path);
                 debug!("Copying {}", file_path.display());
