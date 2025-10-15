@@ -103,7 +103,7 @@ impl MoveContext {
                         "No editable files found in {}, skipping",
                         ctx_to.task_path.display()
                     );
-                    warn!("Reason: {e}");
+                    warn!("Reason: {e:?}");
                     continue;
                 }
             };

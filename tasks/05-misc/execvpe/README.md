@@ -44,6 +44,6 @@
 сумма его длины и любой части `PATH` не превосходит
 [`PATH_MAX`](https://askubuntu.com/questions/859945/what-is-the-maximum-length-of-a-file-path-in-ubuntu).
 
-При итерации по компонентам `PATH`, игнорируйте ошибки `ENOENT`, `ENOTDIR` и `EACCESS`. При завершении
+При итерации по компонентам `PATH`, игнорируйте ошибки `ENOENT`, `ENOTDIR` и `EACCES`. При завершении
 `ExecVPE` с ошибкой, не требуется совпадение переменной `Errno` с библиотечной реализацией.
 </details>
