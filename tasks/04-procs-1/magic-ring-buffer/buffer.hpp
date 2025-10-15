@@ -33,7 +33,7 @@ struct RingBuffer {
             return errno;
         }
 
-        //munmap(reserve, B);
+        // munmap(reserve, B);
 
         void* origin_buf =
             mremap(origin_tmp, B, B, MREMAP_MAYMOVE | MREMAP_FIXED, reserve);
@@ -44,7 +44,7 @@ struct RingBuffer {
             return errno;
         }
 
-        //munmap(static_cast<char*>(origin_buf) + B, B);
+        // munmap(static_cast<char*>(origin_buf) + B, B);
 
         void* mirror_buf = mremap(
             origin_buf, B, B, MREMAP_MAYMOVE | MREMAP_FIXED | MREMAP_DONTUNMAP,
