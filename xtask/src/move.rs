@@ -52,14 +52,20 @@ impl MoveContext {
             let entry =
                 entry.with_context(|| format!("iterating over {}", self.to.repo_root.display()))?;
 
-            if !entry.file_type().is_dir() || !TaskContext::is_task(entry.path())? {
+            if !entry.file_type().is_dir()
+                || !TaskContext::is_task(entry.path())
+                    .with_context(|| format!("checking entry {}", entry.path().display()))?
+            {
                 continue;
             }
 
-            let ctx_to = TaskContext::new(entry.path(), Rc::clone(&self.to.repo_root))?;
+            let ctx_to = TaskContext::new(entry.path(), Rc::clone(&self.to.repo_root))
+                .with_context(|| format!("creating task context for {}", entry.path().display()))?;
 
             let from_path = self.from.repo_root.join(&ctx_to.task_path);
-            if !TaskContext::is_task(&from_path)? {
+            if !TaskContext::is_task(&from_path)
+                .with_context(|| format!("checking {}", from_path.display()))?
+            {
                 warn!(
                     "Path {} is not a task, likely your repository is outdated",
                     from_path.display()

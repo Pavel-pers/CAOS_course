@@ -5,7 +5,7 @@ use std::{
     rc::Rc,
 };
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, anyhow};
 use globset::{Glob, GlobSetBuilder};
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
@@ -132,10 +132,17 @@ impl TaskContext {
             Self {
                 task_path,
                 test_config,
-                repo_root,
+                repo_root: Rc::clone(&repo_root),
             }
         };
-        r.with_context(|| format!("creating task context for {}", task_abs_path.display()))
+        r.with_context(|| {
+            format!(
+                "creating task context for {} at {} with config {}",
+                task_abs_path.display(),
+                repo_root.display(),
+                config_path.display()
+            )
+        })
     }
 
     pub(crate) fn new(task_abs_path: &Path, repo_root: Rc<Path>) -> Result<Self> {
@@ -206,7 +213,7 @@ impl TaskContext {
             }
 
             if editable.is_empty() {
-                bail!("no editable files found");
+                Err(anyhow!("no editable files found"))?;
             }
 
             editable
