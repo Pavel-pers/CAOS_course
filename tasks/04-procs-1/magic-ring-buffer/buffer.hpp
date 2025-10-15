@@ -43,8 +43,16 @@ struct RingBuffer {
             mremap(origin_tmp, B, B, MREMAP_MAYMOVE | MREMAP_FIXED, reserve);
         if (origin_buf == MAP_FAILED) {
             std::cerr << "unluck :(";
-            munmap(static_cast<char*>(origin_tmp) + B, B);
+            munmap(origin_tmp, B);
+            munmap(static_cast<char*>(reserve) + B, B);
             return errno;
+        }
+
+        {
+            volatile char* p = static_cast<volatile char*>(origin_buf);
+            for (size_t off = 0; off < B; off += kPageSize) {
+                p[off] = 0;
+            }
         }
 
         munmap(static_cast<char*>(origin_buf) + B, B);
