@@ -30,7 +30,7 @@ struct RingBuffer {
         }
 
         void* origin_tmp = mmap(nullptr, B, PROT_READ | PROT_WRITE,
-                                MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+                                MAP_ANONYMOUS | MAP_SHARED, -1, 0);
         if (origin_tmp == MAP_FAILED) {
             std::cerr << "unluck :(";
             munmap(reserve, 2 * B);
