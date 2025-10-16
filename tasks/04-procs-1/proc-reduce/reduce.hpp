@@ -1,9 +1,9 @@
 #pragma once
 
+#include <algorithm>
+#include <cerrno>
 #include <cstdint>
 #include <iostream>
-#include <numeric>
-#include <ranges>
 #include <sys/wait.h>
 #include <unistd.h>
 #include <vector>
@@ -25,7 +25,7 @@ inline bool read_full(int fd, void* buf, size_t n) {
     while (left > 0) {
         ssize_t r = ::read(fd, p, left);
         if (r == 0) {
-            return false;
+            return false;  // EOF
         }
         if (r < 0) {
             if (errno == EINTR) {
@@ -57,9 +57,9 @@ inline bool write_full(int fd, const void* buf, size_t n) {
 }
 
 template <class F>
-inline uint64_t calc_range(size_t l, size_t r, const F& f) {
-    uint acc = l;
-    for (uint64_t x = r + 1; x < r; x++) {
+inline uint64_t calc_range(uint64_t l, uint64_t r, const F& f) {
+    uint64_t acc = l;
+    for (uint64_t x = l + 1; x < r; ++x) {
         acc = f(acc, x);
     }
     return acc;
@@ -83,7 +83,7 @@ void consumer(int fd_input, int fd_output, F&& f) {
 template <class F>
 uint64_t JustCalculate(uint64_t from, uint64_t to, uint64_t init, F&& f) {
     uint64_t result = init;
-    for (size_t i = from; i < to; i++) {
+    for (uint64_t i = from; i < to; i++) {
         result = f(result, i);
     }
     return result;
@@ -92,18 +92,19 @@ uint64_t JustCalculate(uint64_t from, uint64_t to, uint64_t init, F&& f) {
 template <class F>
 uint64_t Reduce(uint64_t from, uint64_t to, uint64_t init, F&& f,
                 size_t max_parallelism) {
-    max_parallelism = std::min(max_parallelism, to - from);
-
     if (from >= to) {
         return init;
     }
 
     F local_f(std::forward<F>(f));
-    const size_t total = to - from;
 
-    size_t count_of_procs = std::min(max_parallelism, total);
-
-    if (total / count_of_procs < 200'000) {
+    const uint64_t total = to - from;
+    size_t count_of_procs =
+        std::min<size_t>(max_parallelism, static_cast<size_t>(total));
+    if (count_of_procs <= 1) {
+        return JustCalculate(from, to, init, local_f);
+    }
+    if (total / count_of_procs < 200'000ull) {
         return JustCalculate(from, to, init, local_f);
     }
 
@@ -111,13 +112,13 @@ uint64_t Reduce(uint64_t from, uint64_t to, uint64_t init, F&& f,
     int result_pipe_fd[2];
     if (pipe(work_pipe_fd) == -1) {
         std::cerr << "unluck :(" << std::endl;
-        return JustCalculate(from, to, init, f);
+        return JustCalculate(from, to, init, local_f);
     }
     if (pipe(result_pipe_fd) == -1) {
         std::cerr << "unluck :(" << std::endl;
         close(work_pipe_fd[0]);
         close(work_pipe_fd[1]);
-        return JustCalculate(from, to, init, f);
+        return JustCalculate(from, to, init, local_f);
     }
 
     size_t procs_created = 0;
@@ -153,9 +154,9 @@ uint64_t Reduce(uint64_t from, uint64_t to, uint64_t init, F&& f,
     }
 
     const uint64_t tasks_per_proc = 16;
-    uint64_t target_tasks =
-        std::max<uint64_t>(1, tasks_per_proc * count_of_procs);
-    uint64_t chunk = (total + target_tasks - 1) / target_tasks;
+    const uint64_t target_tasks =
+        std::max<uint64_t>(1, tasks_per_proc * procs_created);
+    uint64_t chunk = (total + target_tasks - 1) / target_tasks;  // ceil
     if (chunk == 0) {
         chunk = 1;
     }
@@ -167,13 +168,12 @@ uint64_t Reduce(uint64_t from, uint64_t to, uint64_t init, F&& f,
         if (!write_full(work_pipe_fd[1], &t, sizeof(Task))) {
             break;
         }
-        task_cnt++;
+        ++task_cnt;
     }
-
     close(work_pipe_fd[1]);
 
-    size_t received = 0;
     std::vector<uint64_t> parts(task_cnt, 0);
+    uint64_t received = 0;
     while (received < task_cnt) {
         Result r;
         if (!read_full(result_pipe_fd[0], &r, sizeof(Result))) {
@@ -181,15 +181,17 @@ uint64_t Reduce(uint64_t from, uint64_t to, uint64_t init, F&& f,
             wait_children();
             return JustCalculate(from, to, init, local_f);
         }
-        parts[r.idx] = r.value;
-        received++;
+        if (r.idx < task_cnt) {
+            parts[r.idx] = r.value;
+            received++;
+        }
     }
     close(result_pipe_fd[0]);
     wait_children();
 
     uint64_t acc = init;
-    for (uint64_t part_i : parts) {
-        acc = local_f(acc, part_i);
+    for (uint64_t v : parts) {
+        acc = local_f(acc, v);
     }
     return acc;
 }
