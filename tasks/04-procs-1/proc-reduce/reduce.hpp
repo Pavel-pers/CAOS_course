@@ -1,21 +1,82 @@
 #pragma once
 
 #include <cstdint>
+#include <iostream>
 #include <numeric>
 #include <ranges>
-#include <unistd.h>
-#include <iostream>
 #include <sys/wait.h>
+#include <unistd.h>
 #include <vector>
 
+struct Task {
+    uint64_t idx;
+    uint64_t L;
+    uint64_t R;
+};
+
+struct Result {
+    uint64_t idx;
+    uint64_t value;
+};
+
+inline bool read_full(int fd, void* buf, size_t n) {
+    auto* p = static_cast<unsigned char*>(buf);
+    size_t left = n;
+    while (left > 0) {
+        ssize_t r = ::read(fd, p, left);
+        if (r == 0) {
+            return false;
+        }
+        if (r < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            return false;
+        }
+        p += r;
+        left -= static_cast<size_t>(r);
+    }
+    return true;
+}
+
+inline bool write_full(int fd, const void* buf, size_t n) {
+    auto* p = static_cast<const unsigned char*>(buf);
+    size_t left = n;
+    while (left > 0) {
+        ssize_t r = ::write(fd, p, left);
+        if (r < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            return false;
+        }
+        p += r;
+        left -= static_cast<size_t>(r);
+    }
+    return true;
+}
+
+template <class F>
+inline uint64_t calc_range(size_t l, size_t r, const F& f) {
+    uint acc = l;
+    for (uint64_t x = r + 1; x < r; x++) {
+        acc = f(acc, x);
+    }
+    return acc;
+}
 
 template <class F>
 void consumer(int fd_input, int fd_output, F&& f) {
-    dup2(fd_input, STDIN_FILENO);
-    dup2(fd_output, STDOUT_FILENO);
-    int index, lhs, rhs;
-    while (std::cin >> index >> lhs >> rhs) {
-        std::cout << index << ' ' << f(lhs, rhs) << '\n';
+    Task t;
+    while (read_full(fd_input, &t, sizeof(Task))) {
+        if (t.L >= t.R) {
+            continue;
+        }
+        uint64_t value = calc_range(t.L, t.R, f);
+        Result r{t.idx, value};
+        if (!write_full(fd_output, &r, sizeof(Result))) {
+            break;
+        }
     }
 }
 
@@ -33,6 +94,19 @@ uint64_t Reduce(uint64_t from, uint64_t to, uint64_t init, F&& f,
                 size_t max_parallelism) {
     max_parallelism = std::min(max_parallelism, to - from);
 
+    if (from >= to) {
+        return init;
+    }
+
+    F local_f(std::forward<F>(f));
+    const size_t total = to - from;
+
+    size_t count_of_procs = std::min(max_parallelism, total);
+
+    if (total / count_of_procs < 200'000) {
+        return JustCalculate(from, to, init, local_f);
+    }
+
     int work_pipe_fd[2];
     int result_pipe_fd[2];
     if (pipe(work_pipe_fd) == -1) {
@@ -46,60 +120,76 @@ uint64_t Reduce(uint64_t from, uint64_t to, uint64_t init, F&& f,
         return JustCalculate(from, to, init, f);
     }
 
-    size_t count_of_childs = 0;
-
-    auto close_pipes = [&]() {
-        close(work_pipe_fd[0]);
-        close(work_pipe_fd[1]);
-        close(result_pipe_fd[0]);
-        close(result_pipe_fd[1]);
-    };
-
+    size_t procs_created = 0;
     auto wait_children = [&]() {
-        while (count_of_childs--) {
+        while (procs_created--) {
             wait(nullptr);
         }
     };
 
-    for (size_t i = 0; i < max_parallelism; i++) {
+    for (; procs_created < max_parallelism; procs_created++) {
         pid_t child_pid = fork();
-        if (child_pid == -1) {
+        if (child_pid < 0) {
             std::cerr << "threading unluck :(" << std::endl;
-            close_pipes();
-            wait_children();
-            return JustCalculate(from, to, init, f);
+            break;
         }
         if (child_pid == 0) {
-            consumer(work_pipe_fd[0], result_pipe_fd[1], f);
-            exit(0);
-        } else {
-            count_of_childs++;
+            close(work_pipe_fd[1]);
+            close(result_pipe_fd[0]);
+            consumer(work_pipe_fd[0], result_pipe_fd[1], local_f);
+            close(work_pipe_fd[0]);
+            close(result_pipe_fd[1]);
+            _exit(0);
         }
     }
 
-    dup2(work_pipe_fd[1], STDOUT_FILENO);
-    dup2(result_pipe_fd[0], STDIN_FILENO);
+    close(work_pipe_fd[0]);
+    close(result_pipe_fd[1]);
 
-    size_t res_size = to - from + 1;
-    std::vector<uint64_t>res(to - from + 1);
-
-    res[0] = init;
-    for (size_t i = 1; i < res.size(); i++) {
-        res[i] = from + i - 1;
-    }
-    std::iota(res.begin(), res.end(), from);
-    while (res_size > 1) {
-        for (size_t i = 0; i * 2 < res_size; i++) {
-            std::cout << i << ' ' << res[i * 2] << ' ' << res[i * 2 + 1] << '\n';
-        }
-        res_size = (res_size + 1) / 2;
-
-        for (size_t i = 0; i * 2 < res_size; i++) {
-            std::cin >> res[i];
-        }
+    if (procs_created == 0) {
+        close(work_pipe_fd[1]);
+        close(result_pipe_fd[0]);
+        return JustCalculate(from, to, init, local_f);
     }
 
-    close_pipes();
+    const uint64_t tasks_per_proc = 16;
+    uint64_t target_tasks =
+        std::max<uint64_t>(1, tasks_per_proc * count_of_procs);
+    uint64_t chunk = (total + target_tasks - 1) / target_tasks;
+    if (chunk == 0) {
+        chunk = 1;
+    }
+
+    uint64_t task_cnt = 0;
+    for (uint64_t l = from; l < to; l += chunk) {
+        uint64_t r = std::min<uint64_t>(l + chunk, to);
+        Task t{task_cnt, l, r};
+        if (!write_full(work_pipe_fd[1], &t, sizeof(Task))) {
+            break;
+        }
+        task_cnt++;
+    }
+
+    close(work_pipe_fd[1]);
+
+    size_t received = 0;
+    std::vector<uint64_t> parts(task_cnt, 0);
+    while (received < task_cnt) {
+        Result r;
+        if (!read_full(result_pipe_fd[0], &r, sizeof(Result))) {
+            close(result_pipe_fd[0]);
+            wait_children();
+            return JustCalculate(from, to, init, local_f);
+        }
+        parts[r.idx] = r.value;
+        received++;
+    }
+    close(result_pipe_fd[0]);
     wait_children();
-    return res[0];
+
+    uint64_t acc = init;
+    for (uint64_t part_i : parts) {
+        acc = local_f(acc, part_i);
+    }
+    return acc;
 }
