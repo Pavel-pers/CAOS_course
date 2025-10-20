@@ -7,7 +7,7 @@
 #include <unistd.h>
 
 static void usage() {
-    std::fprintf(stderr, "usage: timeout duration command [args ...]\n");
+    std::fprintf(stderr, "usage:  timeout duration command [args ...]\n");
 }
 
 static bool parse_seconds(const char* text, unsigned int& value) {
