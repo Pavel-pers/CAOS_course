@@ -1,9 +1,17 @@
 #include "execvpe.hpp"
+
+#include <syscalls.hpp>
+
 #include <c-strings.hpp>
+
 #include <cerrno>
 #include <cstddef>
 #include <limits.h>
-#include <syscalls.hpp>
+
+static bool is_space(char ch) {
+    return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' || ch == '\f' ||
+           ch == '\v';
+}
 
 static const char* find_env(const char** env, const char* key) {
     if (!env) {
@@ -14,14 +22,14 @@ static const char* find_env(const char** env, const char* key) {
         const char* entry = *it;
         const char* cur = entry;
         while (*cur) {
-            while (*cur == ' ') {
+            while (is_space(*cur)) {
                 ++cur;
             }
             if (*cur == '\0') {
                 break;
             }
             const char* start = cur;
-            while (*cur && *cur != ' ') {
+            while (*cur && !is_space(*cur)) {
                 ++cur;
             }
             if (StrNCmp(start, key, key_len) == 0 && start[key_len] == '=') {
