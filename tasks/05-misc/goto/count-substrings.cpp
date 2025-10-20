@@ -13,32 +13,52 @@ SubstringsCount CountSubstrings(const char* s) {
 
 S0:
     ch = *it++;
-    if (ch == '\0') goto END;
-    if (ch == 'o') goto So;
-    if (ch == 'r') goto Sr;
+    if (ch == '\0') {
+        goto END;
+    }
+    if (ch == 'o') {
+        goto So;
+    }
+    if (ch == 'r') {
+        goto Sr;
+    }
     goto S0;
 
 So:
     ch = *it++;
-    if (ch == '\0') goto END;
+    if (ch == '\0') {
+        goto END;
+    }
     if (ch == 's') {
         ++res.os_num;
         goto S0;
     }
-    if (ch == 'o') goto So;
-    if (ch == 'r') goto Sr;
+    if (ch == 'o') {
+        goto So;
+    }
+    if (ch == 'r') {
+        goto Sr;
+    }
     goto S0;
 
 Sr:
     ch = *it++;
-    if (ch == '\0') goto END;
-    if (ch == 'o') goto Sro;
-    if (ch == 'r') goto Sr;
+    if (ch == '\0') {
+        goto END;
+    }
+    if (ch == 'o') {
+        goto Sro;
+    }
+    if (ch == 'r') {
+        goto Sr;
+    }
     goto S0;
 
 Sro:
     ch = *it++;
-    if (ch == '\0') goto END;
+    if (ch == '\0') {
+        goto END;
+    }
     if (ch == 'p') {
         ++res.rop_num;
         goto S0;
@@ -47,8 +67,12 @@ Sro:
         ++res.os_num;
         goto S0;
     }
-    if (ch == 'o') goto So;
-    if (ch == 'r') goto Sr;
+    if (ch == 'o') {
+        goto So;
+    }
+    if (ch == 'r') {
+        goto Sr;
+    }
     goto S0;
 
 END:
