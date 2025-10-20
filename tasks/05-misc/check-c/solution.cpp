@@ -49,7 +49,7 @@ int main(int argc, char** argv) {
         return 0;
     }
 
-    char tmp[] = "/tmp/my_solutoin_cjeck-c";
+    char tmp[] = "/tmp/check-cXXXXXX";
     int fd = mkstemp(tmp);
     if (fd < 0) {
         std::puts("Invalid");
