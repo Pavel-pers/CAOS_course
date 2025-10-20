@@ -11,7 +11,9 @@ static bool write_all(int fd, const char* buf, size_t len) {
     while (done < len) {
         ssize_t got = write(fd, buf + done, len - done);
         if (got < 0) {
-            if (errno == EINTR) continue;
+            if (errno == EINTR) {
+                continue;
+            }
             return false;
         }
         done += static_cast<size_t>(got);
@@ -21,16 +23,23 @@ static bool write_all(int fd, const char* buf, size_t len) {
 
 static int run_cc(const char* path) {
     pid_t pid = fork();
-    if (pid < 0) return -1;
+    if (pid < 0) {
+        return -1;
+    }
 
     if (pid == 0) {
-        execlp("cc", "cc", "-std=c11", "-xc", "-fsyntax-only", path, (char*)nullptr);
+        execlp("cc", "cc", "-std=c11", "-xc", "-fsyntax-only", path,
+               (char*)nullptr);
         _exit(1);
     }
 
     int st = 0;
-    if (waitpid(pid, &st, 0) < 0) return -1;
-    if (!WIFEXITED(st)) return -1;
+    if (waitpid(pid, &st, 0) < 0) {
+        return -1;
+    }
+    if (!WIFEXITED(st)) {
+        return -1;
+    }
     return WEXITSTATUS(st);
 }
 
@@ -55,7 +64,9 @@ int main(int argc, char** argv) {
     close(fd);
 
     int res = -1;
-    if (ok) res = run_cc(tmp);
+    if (ok) {
+        res = run_cc(tmp);
+    }
     unlink(tmp);
 
     if (ok && res == 0) {
