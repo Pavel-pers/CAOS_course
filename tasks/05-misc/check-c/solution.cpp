@@ -56,7 +56,7 @@ int main(int argc, char** argv) {
         return 0;
     }
 
-    std::string body = "void test_function(void){\n";
+    std::string body = "void test_function(){\n";
     body += argv[1];
     body += "\n}";
 
