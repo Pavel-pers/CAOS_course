@@ -56,9 +56,9 @@ int main(int argc, char** argv) {
         return 0;
     }
 
-    std::string body = "void __wrap(void){\n";
+    std::string body = "void test_function(void){\n";
     body += argv[1];
-    body += "\n}\n";
+    body += "\n}";
 
     bool ok = write_all(fd, body.c_str(), body.size());
     close(fd);
