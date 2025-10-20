@@ -63,6 +63,6 @@ int main() {
         }
     }
 
-    std::cout << total << ' ' << cyr << '\n';
+    std::cout << total << ' ' << cyr;
     return 0;
 }
