@@ -13,9 +13,6 @@ bool is_cyrillic(char32_t cp) {
 }
 
 ch_type read_byte(const std::string& buf, std::size_t& pos) {
-    if (pos >= buf.size()) {
-        return 0;
-    }
     return static_cast<ch_type>(buf[pos++]);
 }
 
@@ -63,6 +60,6 @@ int main() {
         }
     }
 
-    std::cout << total << ' ' << cyr;
+    std::cout << total << ' ' << cyr << '\n';
     return 0;
 }
