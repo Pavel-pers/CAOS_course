@@ -6,9 +6,11 @@
 #include <catch2/catch_get_random_seed.hpp>
 #include <catch2/catch_test_macros.hpp>
 
-#include <chrono>
+#include <atomic>
+#include <chrono>  // IWYU pragma: keep
 #include <cstdint>
 #include <iostream>
+#include <limits>
 #include <span>
 #include <thread>
 #include <utility>
@@ -121,7 +123,7 @@ std::ostream& operator<<(std::ostream& out, const Output& result) {
     return out;
 }
 
-static int SafeDiv(int64_t num, int64_t denom, JumpBuf* err_handler) {
+static int64_t SafeDiv(int64_t num, int64_t denom, JumpBuf* err_handler) {
     if (denom == 0) {
         LongJump(err_handler, Error::kDivideByZero);
     }
@@ -212,7 +214,7 @@ TEST_CASE("NoGlobalState") {
                 if (value == 0) {
                     continue;
                 }
-                if (!CheckExactValue(rng.Generate64())) {
+                if (!CheckExactValue(value)) {
                     fails.fetch_add(1);
                 }
             }
@@ -227,4 +229,5 @@ TEST_CASE("NoGlobalState") {
     }
 
     INFO(fails.load() << " failures encountered");
+    CHECK(fails.load() == 0);
 }
