@@ -52,14 +52,20 @@ impl MoveContext {
             let entry =
                 entry.with_context(|| format!("iterating over {}", self.to.repo_root.display()))?;
 
-            if !entry.file_type().is_dir() || !TaskContext::is_task(entry.path())? {
+            if !entry.file_type().is_dir()
+                || !TaskContext::is_task(entry.path())
+                    .with_context(|| format!("checking entry {}", entry.path().display()))?
+            {
                 continue;
             }
 
-            let ctx_to = TaskContext::new(entry.path(), Rc::clone(&self.to.repo_root))?;
+            let ctx_to = TaskContext::new(entry.path(), Rc::clone(&self.to.repo_root))
+                .with_context(|| format!("creating task context for {}", entry.path().display()))?;
 
             let from_path = self.from.repo_root.join(&ctx_to.task_path);
-            if !TaskContext::is_task(&from_path)? {
+            if !TaskContext::is_task(&from_path)
+                .with_context(|| format!("checking {}", from_path.display()))?
+            {
                 warn!(
                     "Path {} is not a task, likely your repository is outdated",
                     from_path.display()
@@ -90,7 +96,18 @@ impl MoveContext {
                 }
             }
 
-            for path_from in ctx_from.find_editable_files()? {
+            let source_editable_files = match ctx_from.find_editable_files() {
+                Ok(f) => f,
+                Err(e) => {
+                    warn!(
+                        "No editable files found in {}, skipping",
+                        ctx_to.task_path.display()
+                    );
+                    warn!("Reason: {e:?}");
+                    continue;
+                }
+            };
+            for path_from in source_editable_files {
                 let file_path = ctx_from.strip_task_root_logged(&path_from)?;
                 let path_to = ctx_to.path_of(file_path);
                 debug!("Copying {}", file_path.display());
