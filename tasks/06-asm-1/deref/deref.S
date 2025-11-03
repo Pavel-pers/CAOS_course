@@ -5,5 +5,14 @@
 
 .global Deref
 Deref:
-    // TODO: your code here.
+    mov rax, rdi
+    test rsi, rsi
+    je .return_value
+
+.loop:
+    mov rax, qword ptr [rax]
+    dec rsi
+    jne .loop
+
+.return_value:
     ret
