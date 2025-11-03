@@ -5,5 +5,8 @@
 
 .global ArgSum
 ArgSum:
-    // TODO: your code here.
+    mov rax, rdi
+    add rax, rsi
+    add rax, rdx
+    add rax, rcx
     ret
